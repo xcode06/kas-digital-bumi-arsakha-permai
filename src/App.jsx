@@ -10,7 +10,6 @@ import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatc
 
 // ==========================================
 // FIREBASE CONFIGURATION
-// Ganti dengan konfigurasi dari Firebase Project Anda
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyAb0-5ul8LQ2PVr9NARh0bksYHcmMQJyLw",
@@ -151,13 +150,12 @@ export default function App() {
   const [houseSearchQuery, setHouseSearchQuery] = useState('');
   const [iuranSearchQuery, setIuranSearchQuery] = useState('');
 
-  // SYSTEM SETTINGS CONFIG (Sederhana dari kalkulasi berjalan)
+  // SYSTEM SETTINGS CONFIG
   const [systemConfig, setSystemConfig] = useState({
     cashInHand: 0,
     bankBalance: 0
   });
 
-  // Kalkulasi Saldo Bank & Fisik dari Settlement
   useEffect(() => {
     const totalCashHanded = cashSettlements.reduce((acc, curr) => acc + curr.handedAmount, 0);
     setSystemConfig(prev => ({ ...prev, cashInHand: totalCashHanded }));
@@ -454,7 +452,6 @@ export default function App() {
         amount: newAmount, date: editingTx.date, description: editingTx.description 
       }, { merge: true });
 
-      // Jika dari iuran, kita update bill-nya juga (mencari berdasarkan receiptNo yang sama dengan editingTx.id)
       const relatedBills = bills.filter(b => b.receiptNo === editingTx.id);
       if(relatedBills.length > 0) {
         const batch = writeBatch(db);
@@ -483,7 +480,6 @@ export default function App() {
     setShowResetTxModal(false);
   };
 
-  // UI LOGIN
   if (!isDataLoaded) {
     return <div className="min-h-screen bg-slate-100 flex items-center justify-center font-bold text-slate-500">Memuat Data Aplikasi...</div>;
   }
@@ -497,14 +493,12 @@ export default function App() {
             <h1 className="text-xl font-bold text-slate-900 pt-2">Sistem Laporan Kas Digital</h1>
             <p className="text-xs text-slate-500">Masuk dengan akun terdaftar untuk mengakses aplikasi</p>
           </div>
-
           {loginError && (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{loginError}</span>
             </div>
           )}
-
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Pengguna (Username)</label>
@@ -589,7 +583,6 @@ export default function App() {
         <main className="flex-1 space-y-6 overflow-hidden">
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* Cards Saldo */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-emerald-900 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col justify-between">
                   <div className="absolute right-2 bottom-0 text-emerald-800/40 text-7xl font-bold select-none pointer-events-none font-serif">Rp</div>
@@ -625,7 +618,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* BARIS PEMASUKAN LAIN & RESET TRANSAKSI */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white border border-slate-200 p-4 rounded-3xl shadow-sm gap-3">
                 <div>
                   <h3 className="font-bold text-slate-900 text-sm">Pemasukan Kas & Kontrol Transaksi</h3>
@@ -711,7 +703,6 @@ export default function App() {
                   )}
                 </div>
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {houses.filter(h => h.residentName.toLowerCase().includes(houseSearchQuery.toLowerCase()) || `${h.block} ${h.number}`.toLowerCase().includes(houseSearchQuery.toLowerCase())).map((h) => (
                   <div key={h.id} className="bg-white border rounded-3xl p-5 shadow-sm space-y-3 relative">
@@ -797,9 +788,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ... ACTIVE TABS (REKONSILIASI, PENGELUARAN, MASTER, LAPORAN, AUDIT) Sama persis strukturnya seperti kode aslinya ... */}
-          {/* Untuk mempersingkat contoh ini, format TAB di atas berlaku untuk semua tab lainnya tanpa perubahan UI, hanya logic set/get state yang sudah saya ganti di awal dengan fungsi Firebase */}
-          
           {activeTab === 'rekonsiliasi' && (
              <div className="space-y-6">
              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex justify-between items-center">
@@ -812,7 +800,6 @@ export default function App() {
                  </button>
                )}
              </div>
-
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div className="bg-white border rounded-3xl p-6 shadow-sm space-y-4">
                  <h3 className="font-bold text-slate-900 text-sm border-b pb-2">Posisi Kas Fisik & Bank</h3>
@@ -831,7 +818,6 @@ export default function App() {
                  </div>
                </div>
              </div>
-
              {cashSettlements.length > 0 && (
                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-5 space-y-3">
                  <table className="w-full text-xs text-left font-mono">
@@ -856,13 +842,200 @@ export default function App() {
            </div>
           )}
 
-          {/* ... SEMUA TAB DAN MODAL LANJUTAN JUGA DI-RENDER SEPERTI BIASA ... */}
-          {/* Untuk tidak memotong kode karena batasan limit karakter, sisa kode Modal (Tambah Rumah, Tambah Pengeluaran, Edit Transaksi, dll) disesuaikan secara proporsional seperti implementasi sebelumnya yang state UI-nya dikendalikan secara lokal, namun Action function-nya (handleAddUser dll) telah memanggil Firebase API. */}
+          {activeTab === 'pengeluaran' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
+                <div>
+                  <h2 className="font-bold text-slate-900 text-base">Pengeluaran & Persetujuan Kas</h2>
+                </div>
+                {['SUPERADMIN', 'BENDAHARA', 'KETUA'].includes(currentUser.role) && (
+                  <button onClick={() => setShowAddExpenseModal(true)} className="bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md">
+                    <Plus className="w-4 h-4" /> Ajukan Pengeluaran
+                  </button>
+                )}
+              </div>
+              <div className="space-y-4">
+                {expenseRequests.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-xs">Belum ada pengajuan pengeluaran kas.</div>
+                ) : (
+                  expenseRequests.map((req) => (
+                    <div key={req.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
+                      <div className="flex justify-between items-center border-b pb-3">
+                        <div>
+                          <span className="text-[10px] font-mono text-slate-400 uppercase">{req.id}</span>
+                          <h3 className="font-bold text-slate-900 text-sm">{req.purpose}</h3>
+                          <p className="text-xs text-slate-500">Kategori: {req.category} • Pengaju: {req.applicantName}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-base font-bold font-mono text-rose-700">{formatIDR(req.amount)}</div>
+                          <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full ${req.status === 'REALIZED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {req.status}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600">{req.description}</p>
+                      {req.status === 'PENDING' && ['SUPERADMIN', 'KETUA', 'BENDAHARA'].includes(currentUser.role) && (
+                        <div className="pt-2 flex justify-end">
+                          <button onClick={() => handleApproveExpense(req.id)} className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-1.5 rounded-xl font-bold flex items-center gap-1 shadow-sm">
+                            <Check className="w-4 h-4" /> Setujui & Realisasikan
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
+          {activeTab === 'laporan' && (
+            <div className="space-y-6">
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex justify-between items-center no-print">
+                <div>
+                  <h2 className="font-bold text-slate-900 text-base flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-700" /> Laporan Keuangan Transparan</h2>
+                </div>
+                <button onClick={() => window.print()} className="bg-slate-900 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md">
+                  <Printer className="w-4 h-4" /> Cetak Laporan PDF
+                </button>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
+                <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4">
+                  <LogoBumiArsakha className="h-16" showSubtext={true} isDarkBg={false} />
+                  <div className="text-right">
+                    <h3 className="font-serif font-black text-lg text-slate-900 uppercase">LAPORAN KEUANGAN KAS PERUMAHAN</h3>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 font-mono">
+                  <div className="bg-slate-50 p-4 rounded-2xl border">
+                    <span className="text-[10px] text-slate-500 font-sans block">Total Pemasukan:</span>
+                    <strong className="text-lg font-bold text-emerald-800">{formatIDR(totalOfficialIncome)}</strong>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-2xl border">
+                    <span className="text-[10px] text-slate-500 font-sans block">Total Pengeluaran:</span>
+                    <strong className="text-lg font-bold text-rose-700">{formatIDR(totalRealizedExpense)}</strong>
+                  </div>
+                  <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 text-emerald-900">
+                    <span className="text-[10px] text-emerald-800 font-sans block">Saldo Kas Akhir:</span>
+                    <strong className="text-xl font-black text-emerald-800">{formatIDR(finalOfficialCashBalance)}</strong>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 text-center text-xs pt-8 border-t relative items-end">
+                  <div className="relative flex flex-col items-center justify-end h-36">
+                    <p className="text-slate-500 mb-auto font-medium z-10">Ketua Perumahan,</p>
+                    <div className="relative my-1 flex justify-center items-center h-20 w-full">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"><SealStempelOfficial size="w-28 h-28" opacity="opacity-90" /></div>
+                    </div>
+                    <p className="font-bold text-slate-900 underline z-10 relative">Bapak Cece</p>
+                  </div>
+                  <div className="relative flex flex-col items-center justify-end h-36">
+                    <p className="text-slate-500 mb-auto font-medium">Sekretaris,</p>
+                    <div className="h-20 w-full"></div>
+                    <p className="font-bold text-slate-900 underline">Rahman</p>
+                  </div>
+                  <div className="relative flex flex-col items-center justify-end h-36">
+                    <p className="text-slate-500 mb-auto font-medium">Bendahara Kas,</p>
+                    <div className="h-20 w-full"></div>
+                    <p className="font-bold text-slate-900 underline">Yana</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'master' && ['SUPERADMIN', 'ADMIN'].includes(currentUser.role) && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
+                <div>
+                  <h2 className="font-bold text-slate-900 text-base">Kontrol Master & Pengaturan Sistem</h2>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowAddCategoryModal(true)} className="bg-slate-800 text-white text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-sm">
+                    <Plus className="w-3.5 h-3.5" /> Tambah Kategori
+                  </button>
+                  <button onClick={() => setShowAddUserModal(true)} className="bg-emerald-700 text-white text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-sm">
+                    <UserCheck className="w-4 h-4" /> Tambah Pengguna Baru
+                  </button>
+                </div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-5 space-y-4">
+                <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Daftar Kategori Pengeluaran</h3>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((cat, idx) => (
+                    <div key={idx} className="bg-emerald-50 text-emerald-900 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2">
+                      <span>{cat}</span>
+                      {currentUser.role === 'SUPERADMIN' && (
+                        <div className="flex items-center gap-1 border-l border-emerald-300 pl-1.5">
+                          <button onClick={() => handleDeleteCategory(cat)} className="p-0.5 text-rose-500 hover:text-rose-700"><Trash2 className="w-3 h-3" /></button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-5 space-y-3">
+                <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Daftar Akun Pengguna Terdaftar</h3>
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b">
+                    <tr>
+                      <th className="p-3">Username</th><th className="p-3">Nama Lengkap</th><th className="p-3">Role</th>
+                      {currentUser.role === 'SUPERADMIN' && <th className="p-3 text-center">Aksi</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y font-mono">
+                    {users.map((u) => (
+                      <tr key={u.id}>
+                        <td className="p-3 font-bold text-slate-900">{u.username}</td>
+                        <td className="p-3 font-sans font-semibold text-slate-800">{u.name}</td>
+                        <td className="p-3"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800">{u.role}</span></td>
+                        {currentUser.role === 'SUPERADMIN' && (
+                          <td className="p-3 text-center font-sans">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => { setEditingUser(u); setShowEditUserModal(true); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-bold border">Edit</button>
+                              {u.id !== 'usr-00' && (
+                                <button onClick={() => handleDeleteUser(u.id)} className="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded-lg text-[10px] font-bold border border-rose-200">Hapus</button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'audit' && currentUser.role === 'SUPERADMIN' && (
+            <div className="space-y-6">
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                <h2 className="font-bold text-slate-900 text-base flex items-center gap-2"><Shield className="w-5 h-5 text-emerald-700" /> Audit Log System</h2>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-6">
+                {auditLogs.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center">Belum ada aktivitas audit tercatat.</p>
+                ) : (
+                  <table className="w-full text-xs text-left font-mono">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b">
+                      <tr><th className="p-3">Waktu</th><th className="p-3">User</th><th className="p-3">Aksi</th><th className="p-3">Detail</th></tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {auditLogs.map((l) => (
+                        <tr key={l.id}>
+                          <td className="p-3 text-slate-500">{l.timestamp}</td><td className="p-3 font-bold text-slate-800">{l.user}</td>
+                          <td className="p-3">{l.action}</td><td className="p-3 font-sans text-slate-600">{l.details}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
-      {/* CONTOH SATU MODAL TAMBAH PENGGUNA YANG TELAH MENGGUNAKAN API FIREBASE YANG DIPERBARUI */}
+      {/* ALL MODALS (100% COMPLETE) */}
+
       {showAddUserModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
@@ -901,7 +1074,460 @@ export default function App() {
         </div>
       )}
 
-      {/* CATATAN: Semua modal lainnya (seperti showAddHouseModal, showPaymentModal, showEditTxModal) mengikuti format JSX persis yang lama. Form submit-nya secara otomatis telah diarahkan ke fungsi firebase `handle...` yang baru dibuat di atas. */}
+      {showEditUserModal && editingUser && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Data Pengguna (SuperAdmin)</h3>
+              <button onClick={() => setShowEditUserModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleUpdateUser} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Username</label>
+                <input type="text" required value={editingUser.username} onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap</label>
+                <input type="text" required value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Role / Hak Akses</label>
+                <select value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                  <option value="WARGA">WARGA</option>
+                  <option value="PETUGAS">PETUGAS</option>
+                  <option value="BENDAHARA">BENDAHARA</option>
+                  <option value="SEKRETARIS">SEKRETARIS</option>
+                  <option value="KETUA">KETUA</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="SUPERADMIN">SUPERADMIN</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Password Baru</label>
+                <input type="text" required value={editingUser.password} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Perubahan User</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddHouseModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Tambah Unit Rumah Baru</h3>
+              <button onClick={() => setShowAddHouseModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleAddHouse} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Blok Rumah</label>
+                <select value={newHouse.block} onChange={(e) => setNewHouse({ ...newHouse, block: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                  {['Blok A', 'Blok B', 'Blok C', 'Blok D', 'Blok E', 'Blok F', 'Blok G', 'Blok H', 'Blok I', 'Blok J', 'Blok K', 'Blok L', 'Blok M'].map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor Rumah</label>
+                <input type="text" required placeholder="01" value={newHouse.number} onChange={(e) => setNewHouse({ ...newHouse, number: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Penghuni Warga</label>
+                <input type="text" required placeholder="Nama Lengkap Warga" value={newHouse.residentName} onChange={(e) => setNewHouse({ ...newHouse, residentName: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor WhatsApp / HP</label>
+                <input type="text" placeholder="08123456789" value={newHouse.phone} onChange={(e) => setNewHouse({ ...newHouse, phone: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Unit Rumah</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditHouseModal && editingHouse && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Data Unit Rumah</h3>
+              <button onClick={() => setShowEditHouseModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleUpdateHouse} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Blok Rumah</label>
+                <select value={editingHouse.block} onChange={(e) => setEditingHouse({ ...editingHouse, block: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                  {['Blok A', 'Blok B', 'Blok C', 'Blok D', 'Blok E', 'Blok F', 'Blok G', 'Blok H', 'Blok I', 'Blok J', 'Blok K', 'Blok L', 'Blok M'].map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor Rumah</label>
+                <input type="text" required value={editingHouse.number} onChange={(e) => setEditingHouse({ ...editingHouse, number: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Penghuni Warga</label>
+                <input type="text" required value={editingHouse.residentName} onChange={(e) => setEditingHouse({ ...editingHouse, residentName: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor WhatsApp / HP</label>
+                <input type="text" value={editingHouse.phone} onChange={(e) => setEditingHouse({ ...editingHouse, phone: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Perubahan Unit</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddCategoryModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Tambah Kategori Pengeluaran</h3>
+              <button onClick={() => setShowAddCategoryModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleAddCategory} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Kategori Baru</label>
+                <input type="text" required placeholder="Contoh: Perbaikan PJU" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <button type="submit" className="w-full bg-slate-900 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Kategori</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddOtherIncomeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Pencatatan Pemasukan Kas Lainnya</h3>
+              <button onClick={() => setShowAddOtherIncomeModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleAddOtherIncome} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Asal Dana / Kategori</label>
+                <input type="text" required placeholder="Contoh: Sumbangan Donatur / Bantuan Pemkab" value={newOtherIncome.source} onChange={(e) => setNewOtherIncome({ ...newOtherIncome, source: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Pengirim / Pembayar / Donatur</label>
+                <input type="text" required placeholder="Nama Lengkap / Instansi" value={newOtherIncome.payerName} onChange={(e) => setNewOtherIncome({ ...newOtherIncome, payerName: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Penerimaan</label>
+                <input type="date" required value={newOtherIncome.date} onChange={(e) => setNewOtherIncome({ ...newOtherIncome, date: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal Penerimaan (Rp)</label>
+                <input type="number" required placeholder="100000" value={newOtherIncome.amount} onChange={(e) => setNewOtherIncome({ ...newOtherIncome, amount: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Keterangan Catatan Detail</label>
+                <textarea rows={2} placeholder="Keterangan tambahan..." value={newOtherIncome.description} onChange={(e) => setNewOtherIncome({ ...newOtherIncome, description: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Pemasukan Lain</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Pencatatan Pembayaran Iuran</h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleRecordPayment} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Pilih Unit Rumah</label>
+                <select required value={selectedHouseForPayment} onChange={(e) => setSelectedHouseForPayment(e.target.value)} className="w-full text-xs p-2.5 border rounded-xl font-bold bg-slate-50">
+                  <option value="">-- Pilih Unit / Warga --</option>
+                  {houses.map((h) => (
+                    <option key={h.id} value={h.id}>{h.block} No. {h.number} - {h.residentName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Mulai Bulan</label>
+                  <select value={startMonth} onChange={(e) => setStartMonth(parseInt(e.target.value))} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                    {MONTH_NAMES.map((m, idx) => (
+                      <option key={idx} value={idx + 1}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tahun</label>
+                  <select value={startYear} onChange={(e) => setStartYear(parseInt(e.target.value))} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                    <option value={2026}>2026</option>
+                    <option value={2027}>2027</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Durasi (Jumlah Bulan)</label>
+                <select value={paymentMonths} onChange={(e) => setPaymentMonths(parseInt(e.target.value))} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                  <option value={1}>1 Bulan (Rp 5.000)</option>
+                  <option value={3}>3 Bulan (Rp 15.000)</option>
+                  <option value={6}>6 Bulan (Rp 30.000)</option>
+                  <option value={12}>12 Bulan (Rp 60.000)</option>
+                </select>
+              </div>
+              {currentUser.role === 'SUPERADMIN' && (
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-2xl space-y-2">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block flex items-center gap-1">
+                    <Shield className="w-3.5 h-3.5 text-amber-700" /> Opsi Khusus SuperAdmin
+                  </span>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-700 mb-1">Set Status Khusus</label>
+                    <select value={superAdminCustomStatus} onChange={(e) => setSuperAdminCustomStatus(e.target.value)} className="w-full text-xs p-2 border rounded-xl bg-white font-bold">
+                      <option value="PAID">PAID (Lunas)</option>
+                      <option value="EXEMPTED">EXEMPTED (Bebas Iuran / Dispensasi)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              <button type="submit" className="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Proses Pembayaran & Cetak</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddExpenseModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Formulir Pengajuan Pengeluaran Kas</h3>
+              <button onClick={() => setShowAddExpenseModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleAddExpenseRequest} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Kategori</label>
+                <select value={newExpense.category} onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                  {categories.map((cat, idx) => (
+                    <option key={idx} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal (Rp)</label>
+                <input type="number" required placeholder="50000" value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tujuan / Keperluan</label>
+                <input type="text" required placeholder="Pembelian Lampu PJU" value={newExpense.purpose} onChange={(e) => setNewExpense({ ...newExpense, purpose: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Keterangan Detail</label>
+                <textarea rows={2} placeholder="Keterangan..." value={newExpense.description} onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Kirim Pengajuan</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showSettlementModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Input Setoran Hasil Penagihan Kas</h3>
+              <button onClick={() => setShowSettlementModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleRecordSettlement} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Petugas Penagih</label>
+                <input type="text" required value={newSettlement.collectorName} onChange={(e) => setNewSettlement({ ...newSettlement, collectorName: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Catatan Penagihan (Rp)</label>
+                <input type="number" required placeholder="25000" value={newSettlement.totalCollected} onChange={(e) => setNewSettlement({ ...newSettlement, totalCollected: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Uang Fisik Diserahkan ke Bendahara (Rp)</label>
+                <input type="number" required placeholder="25000" value={newSettlement.handedAmount} onChange={(e) => setNewSettlement({ ...newSettlement, handedAmount: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Catatan</label>
+                <input type="text" placeholder="Setoran tunai" value={newSettlement.notes} onChange={(e) => setNewSettlement({ ...newSettlement, notes: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Setoran</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDetailsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Rekapan Pembayaran Iuran Warga</h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  Unit {showDetailsModal.block} No. {showDetailsModal.number} - {showDetailsModal.residentName}
+                </p>
+              </div>
+              <button onClick={() => setShowDetailsModal(null)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div className="bg-slate-50 p-3 rounded-2xl border flex justify-between items-center text-xs">
+                <span className="font-semibold text-slate-600">Total Pembayaran Terakumulasi:</span>
+                <span className="font-mono font-bold text-emerald-800 text-sm">
+                  {formatIDR(bills.filter(b => b.houseId === showDetailsModal.id).reduce((acc, c) => acc + c.amount, 0))}
+                </span>
+              </div>
+              <div className="border rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b">
+                    <tr>
+                      <th className="p-2.5">Bulan / Tahun</th><th className="p-2.5">Tanggal Bayar</th>
+                      <th className="p-2.5 text-right">Nominal</th><th className="p-2.5 text-center">Status</th>
+                      <th className="p-2.5 text-center">Kwitansi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y font-mono">
+                    {bills.filter(b => b.houseId === showDetailsModal.id).length === 0 ? (
+                      <tr><td colSpan={5} className="p-4 text-center text-slate-400 font-sans">Belum ada riwayat pembayaran.</td></tr>
+                    ) : (
+                      bills.filter(b => b.houseId === showDetailsModal.id).map((b) => (
+                        <tr key={b.id}>
+                          <td className="p-2.5 font-bold">{b.periodMonth} {b.periodYear}</td>
+                          <td className="p-2.5 text-slate-500 text-[10px]">{b.paidAt}</td>
+                          <td className="p-2.5 text-right font-bold text-emerald-700">{formatIDR(b.amount)}</td>
+                          <td className="p-2.5 text-center font-sans"><span className="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">{b.status}</span></td>
+                          <td className="p-2.5 text-center font-sans">
+                            <button onClick={() => setSelectedReceipt({ bill: b, house: showDetailsModal })} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 shadow-sm">
+                              <FileText className="w-3 h-3" /> Kwitansi
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedReceipt && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl relative border border-slate-200">
+            <div className="flex justify-between items-center no-print border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Kwitansi Tanda Bukti Pembayaran Resmi</h3>
+              <button onClick={() => setSelectedReceipt(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="border-2 border-sky-500 rounded-2xl p-6 relative bg-gradient-to-b from-sky-50/20 via-white to-sky-50/40 space-y-4 shadow-inner">
+              <div className="flex justify-between items-start">
+                <LogoBumiArsakha className="h-12" showSubtext={false} isDarkBg={false} />
+                <div className="text-right">
+                  <span className="text-[10px] font-sans italic text-sky-800 font-bold block">Bersama Membangun Lingkungan yang Nyaman</span>
+                </div>
+              </div>
+              <div className="text-center py-1 bg-sky-900 text-white rounded-lg font-black text-sm tracking-widest uppercase shadow-sm">
+                — KWITANSI TANDA BUKTI PEMBAYARAN —
+              </div>
+              <div className="grid grid-cols-2 text-xs gap-y-1.5 font-mono pt-1 text-slate-800">
+                <div><span className="text-slate-500 font-sans inline-block w-28">No. Kwitansi</span>: <strong>{selectedReceipt.bill.receiptNo}</strong></div>
+                <div><span className="text-slate-500 font-sans inline-block w-28">Tanggal</span>: {selectedReceipt.bill.paidAt}</div>
+                <div><span className="text-slate-500 font-sans inline-block w-28">Nama Warga</span>: <strong>{selectedReceipt.house.residentName}</strong></div>
+                <div><span className="text-slate-500 font-sans inline-block w-28">Blok / No. Rumah</span>: <strong>{selectedReceipt.house.block} No. {selectedReceipt.house.number}</strong></div>
+              </div>
+              <div className="border border-sky-200 rounded-xl overflow-hidden text-xs">
+                <table className="w-full text-left">
+                  <thead className="bg-sky-100/80 text-sky-900 font-bold uppercase text-[10px]">
+                    <tr><th className="p-2.5 w-12 text-center">No.</th><th className="p-2.5">Perihal</th><th className="p-2.5 text-right w-36">Jumlah</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-sky-100 font-mono">
+                    <tr>
+                      <td className="p-2.5 text-center">1</td>
+                      <td className="p-2.5 font-sans">Iuran Kas Bulanan Perumahan ({selectedReceipt.bill.periodMonth})</td>
+                      <td className="p-2.5 text-right font-bold">{formatIDR(selectedReceipt.bill.amount)}</td>
+                    </tr>
+                    <tr className="bg-sky-50/60 font-bold">
+                      <td colSpan={2} className="p-2.5 text-right font-sans">Total Pembayaran:</td>
+                      <td className="p-2.5 text-right font-black text-sky-900">{formatIDR(selectedReceipt.bill.amount)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-between items-end pt-4 text-[11px]">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-1.5 border-2 border-emerald-600 text-emerald-800 font-black px-3.5 py-1.5 rounded-xl bg-white text-xs tracking-wider shadow-sm transform rotate-[-3deg]">
+                    <Check className="w-4 h-4 stroke-[3]" /> SUDAH BAYAR
+                  </div>
+                </div>
+                <div className="text-center relative min-w-[160px]">
+                  <p className="text-slate-600 font-medium text-[10px]">Petugas Penerima,</p>
+                  <div className="relative h-16 flex items-center justify-center my-1">
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"><SealStempelOfficial size="w-20 h-20" opacity="opacity-90" /></div>
+                  </div>
+                  <p className="font-bold text-slate-900 underline z-10 relative">{selectedReceipt.bill.collectorName || 'Erus'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 no-print">
+              <button onClick={() => window.print()} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-md">
+                <Printer className="w-4 h-4" /> Cetak Kwitansi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditTxModal && editingTx && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Data Transaksi ({editingTx.id})</h3>
+              <button onClick={() => setShowEditTxModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveTxEdit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Jenis & Kategori Transaksi</label>
+                <input type="text" disabled value={`${editingTx.type} - ${editingTx.category}`} className="w-full text-xs p-2.5 border rounded-xl bg-slate-100 font-bold text-slate-600 cursor-not-allowed" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Transaksi</label>
+                <input type="text" required value={editingTx.date} onChange={(e) => setEditingTx({ ...editingTx, date: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Uraian / Keterangan</label>
+                <input type="text" required value={editingTx.description} onChange={(e) => setEditingTx({ ...editingTx, description: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal Transaksi (Rp)</label>
+                <input type="number" required value={editingTx.amount} onChange={(e) => setEditingTx({ ...editingTx, amount: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-emerald-800" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Perubahan Transaksi</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showResetTxModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 border-b pb-3 text-rose-700">
+              <AlertCircle className="w-6 h-6 shrink-0" />
+              <h3 className="font-bold text-slate-900 text-sm">Konfirmasi Reset Seluruh Transaksi</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Apakah Anda yakin ingin **menghapus seluruh riwayat aktivitas transaksi kas (pemasukan, iuran, pengeluaran, dan setoran)** sehingga saldo kas menjadi **Rp 0**?
+            </p>
+            <p className="text-[11px] text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              *Master Data Warga, Unit Rumah, Pengguna, dan Kategori Pengeluaran tidak akan terhapus.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowResetTxModal(false)} className="bg-slate-100 text-slate-700 font-bold text-xs px-4 py-2 rounded-xl border">Batal</button>
+              <button onClick={handleResetTransactions} className="bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-md">Ya, Reset Menjadi Rp 0</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
