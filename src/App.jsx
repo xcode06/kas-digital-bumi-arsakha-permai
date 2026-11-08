@@ -5,6 +5,8 @@ import {
   ChevronRight, Calendar, UserCheck, TrendingUp, TrendingDown, RefreshCw,
   Search, Filter, Bell, Menu, X, Upload, Check, ShieldAlert, Key, FolderCheck, Info, RotateCcw
 } from 'lucide-react';
+import { startCloudSync, useCloudState, useSessionState } from './cloudSync';
+import SyncStatusBadge from './SyncStatusBadge';
 
 // ==========================================
 // LOGO & SEAL COMPONENTS
@@ -101,7 +103,7 @@ const MONTH_NAMES = [
 ];
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useSessionState('currentUser', null);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -109,49 +111,23 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // HELPER LOCALSTORAGE PERSISTENCE
-  const loadState = (key, fallback) => {
-    try {
-      const saved = localStorage.getItem(`kas_bap_${key}`);
-      return saved ? JSON.parse(saved) : fallback;
-    } catch {
-      return fallback;
-    }
-  };
-
-  const saveState = (key, val) => {
-    try {
-      localStorage.setItem(`kas_bap_${key}`, JSON.stringify(val));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // APP DATA STATE (WITH LOCALSTORAGE)
-  const [users, setUsers] = useState(() => loadState('users', INITIAL_USERS));
-  const [houses, setHouses] = useState(() => loadState('houses', INITIAL_HOUSES));
-  const [bills, setBills] = useState(() => loadState('bills', []));
-  const [incomes, setIncomes] = useState(() => loadState('incomes', []));
-  const [expenseRequests, setExpenseRequests] = useState(() => loadState('expenseRequests', []));
-  const [categories, setCategories] = useState(() => loadState('categories', INITIAL_EXPENSE_CATEGORIES));
-  const [auditLogs, setAuditLogs] = useState(() => loadState('auditLogs', []));
-  const [cashSettlements, setCashSettlements] = useState(() => loadState('cashSettlements', []));
-
-  useEffect(() => saveState('users', users), [users]);
-  useEffect(() => saveState('houses', houses), [houses]);
-  useEffect(() => saveState('bills', bills), [bills]);
-  useEffect(() => saveState('incomes', incomes), [incomes]);
-  useEffect(() => saveState('expenseRequests', expenseRequests), [expenseRequests]);
-  useEffect(() => saveState('categories', categories), [categories]);
-  useEffect(() => saveState('auditLogs', auditLogs), [auditLogs]);
-  useEffect(() => saveState('cashSettlements', cashSettlements), [cashSettlements]);
+  // APP DATA STATE (AUTOSAVE KE CLOUD + CADANGAN LOKAL)
+  useEffect(() => startCloudSync(), []);
+  const [users, setUsers] = useCloudState('users', INITIAL_USERS);
+  const [houses, setHouses] = useCloudState('houses', INITIAL_HOUSES);
+  const [bills, setBills] = useCloudState('bills', []);
+  const [incomes, setIncomes] = useCloudState('incomes', []);
+  const [expenseRequests, setExpenseRequests] = useCloudState('expenseRequests', []);
+  const [categories, setCategories] = useCloudState('categories', INITIAL_EXPENSE_CATEGORIES);
+  const [auditLogs, setAuditLogs] = useCloudState('auditLogs', []);
+  const [cashSettlements, setCashSettlements] = useCloudState('cashSettlements', []);
 
   // SEARCH STATES
   const [houseSearchQuery, setHouseSearchQuery] = useState('');
   const [iuranSearchQuery, setIuranSearchQuery] = useState('');
 
   // SYSTEM SETTINGS CONFIG
-  const [systemConfig, setSystemConfig] = useState({
+  const [systemConfig, setSystemConfig] = useCloudState('systemConfig', {
     defaultMonthlyFee: 5000,
     bankName: 'Bank Mandiri',
     bankAccountNo: '123-456-7890',
@@ -668,6 +644,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            <SyncStatusBadge />
             <div className="hidden sm:flex flex-col text-right">
               <span className="text-xs font-bold text-white">{currentUser.name}</span>
               <span className="text-[10px] font-mono text-amber-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-600/50 inline-block font-bold">
