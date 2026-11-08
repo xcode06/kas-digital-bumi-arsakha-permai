@@ -7,5 +7,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false
+  },
+  server: {
+    allowedHosts: [
+      'sb-pybcp2zbqchv.vercel.run'
+    ]
   }
 });
