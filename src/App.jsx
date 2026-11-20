@@ -71,7 +71,7 @@ const SealStempelOfficial = ({ size = "w-28 h-28", opacity = "opacity-90" }) => 
         <path d="M 20,80 L 50,55 L 80,80 V 110 H 20 Z" fill="#166534" stroke="#ffffff" strokeWidth="3" />
         <path d="M 50,70 L 100,30 L 150,70 V 110 H 50 Z" fill="#15803d" stroke="#ffffff" strokeWidth="4" />
         <path d="M 120,70 L 150,45 L 180,70 V 110 H 120 Z" fill="#166534" stroke="#ffffff" strokeWidth="3" />
-        <path d="M 140,45 Q 160,15 165,0 Q 175,20 160,40 Z" fill="#22c55e" />
+        <path d="M 140,45 Q 160,15 165,0 Q 180,35 160,60 Z" fill="#22c55e" />
         <path d="M 155,35 Q 180,15 190,5 Q 195,25 168,42 Z" fill="#16a34a" />
         <path d="M 10,115 Q 100,85 190,110 C 150,125 70,125 10,115 Z" fill="#14532d" />
       </g>
@@ -126,6 +126,12 @@ export default function App() {
   const [houseSearchQuery, setHouseSearchQuery] = useState('');
   const [iuranSearchQuery, setIuranSearchQuery] = useState('');
 
+  // LAPORAN FILTER STATES
+  const [reportFilterType, setReportFilterType] = useState('ALL'); // 'ALL' | 'DAILY' | 'MONTHLY' | 'YEARLY'
+  const [reportFilterDate, setReportFilterDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportFilterMonth, setReportFilterMonth] = useState((new Date().getMonth() + 1).toString());
+  const [reportFilterYear, setReportFilterYear] = useState(new Date().getFullYear().toString());
+
   // SYSTEM SETTINGS CONFIG
   const [systemConfig, setSystemConfig] = useCloudState('systemConfig', {
     defaultMonthlyFee: 5000,
@@ -151,13 +157,23 @@ export default function App() {
   const [showDetailsModal, setShowDetailsModal] = useState(null);
   const [showEditTxModal, setShowEditTxModal] = useState(false);
   const [showResetTxModal, setShowResetTxModal] = useState(false);
+  const [showEditBillModal, setShowEditBillModal] = useState(false);
 
   // FORM STATES
   const [newUser, setNewUser] = useState({ username: '', name: '', role: 'WARGA', password: 'password123' });
   const [editingUser, setEditingUser] = useState(null);
   const [editingHouse, setEditingHouse] = useState(null);
   const [editingCategory, setEditingCategory] = useState({ index: -1, oldName: '', newName: '' });
-  const [newSettlement, setNewSettlement] = useState({ collectorName: 'Erus', totalCollected: '', handedAmount: '', notes: '' });
+  const [editingBill, setEditingBill] = useState(null);
+  const [paymentError, setPaymentError] = useState('');
+
+  const [newSettlement, setNewSettlement] = useState({ 
+    date: new Date().toISOString().split('T')[0], 
+    collectorName: 'Erus', 
+    totalCollected: '', 
+    handedAmount: '', 
+    notes: '' 
+  });
   const [newHouse, setNewHouse] = useState({ block: 'Blok A', number: '', residentName: '', phone: '' });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingTx, setEditingTx] = useState(null);
@@ -179,7 +195,14 @@ export default function App() {
   const [superAdminCustomStatus, setSuperAdminCustomStatus] = useState('PAID');
   const [superAdminCustomDate, setSuperAdminCustomDate] = useState('');
 
-  const [newExpense, setNewExpense] = useState({ category: INITIAL_EXPENSE_CATEGORIES[0], amount: '', purpose: '', description: '', proofUrl: '' });
+  const [newExpense, setNewExpense] = useState({ 
+    date: new Date().toISOString().split('T')[0],
+    category: INITIAL_EXPENSE_CATEGORIES[0], 
+    amount: '', 
+    purpose: '', 
+    description: '', 
+    proofUrl: '' 
+  });
   const [openingBalance] = useState(0);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
 
@@ -238,6 +261,46 @@ export default function App() {
     return [...incs, ...exps].sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [incomes, expenseRequests]);
 
+  // FILTERED REPORT DATA
+  const filteredIncomes = useMemo(() => {
+    return incomes.filter(inc => {
+      const incDate = inc.date.split(' ')[0]; // format YYYY-MM-DD
+      const [y, m] = incDate.split('-');
+      if (reportFilterType === 'DAILY') {
+        return incDate === reportFilterDate;
+      }
+      if (reportFilterType === 'MONTHLY') {
+        return y === reportFilterYear && parseInt(m, 10).toString() === reportFilterMonth;
+      }
+      if (reportFilterType === 'YEARLY') {
+        return y === reportFilterYear;
+      }
+      return true;
+    });
+  }, [incomes, reportFilterType, reportFilterDate, reportFilterMonth, reportFilterYear]);
+
+  const filteredExpenses = useMemo(() => {
+    return expenseRequests.filter(exp => {
+      if (exp.status !== 'REALIZED') return false;
+      const expDate = (exp.realizedDate || exp.requestDate).split(' ')[0];
+      const [y, m] = expDate.split('-');
+      if (reportFilterType === 'DAILY') {
+        return expDate === reportFilterDate;
+      }
+      if (reportFilterType === 'MONTHLY') {
+        return y === reportFilterYear && parseInt(m, 10).toString() === reportFilterMonth;
+      }
+      if (reportFilterType === 'YEARLY') {
+        return y === reportFilterYear;
+      }
+      return true;
+    });
+  }, [expenseRequests, reportFilterType, reportFilterDate, reportFilterMonth, reportFilterYear]);
+
+  const filteredTotalIncome = useMemo(() => filteredIncomes.reduce((acc, curr) => acc + curr.amount, 0), [filteredIncomes]);
+  const filteredTotalExpense = useMemo(() => filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0), [filteredExpenses]);
+  const filteredNetBalance = useMemo(() => filteredTotalIncome - filteredTotalExpense, [filteredTotalIncome, filteredTotalExpense]);
+
   // HANDLERS EDIT DAN RESET TRANSAKSI
   const handleEditTxOpen = (tx) => {
     setEditingTx({
@@ -266,7 +329,6 @@ export default function App() {
         return inc;
       }));
 
-      // Update nominal bill jika transaksi berasal dari iuran warga
       setBills(prev => prev.map(b => {
         if (b.receiptNo === editingTx.id) {
           return { ...b, amount: newAmount };
@@ -403,19 +465,45 @@ export default function App() {
 
   const handleRecordPayment = (e) => {
     e.preventDefault();
+    setPaymentError('');
     if (!selectedHouseForPayment) return;
     const targetHouse = houses.find((h) => h.id === selectedHouseForPayment);
     if (!targetHouse) return;
+
+    // VALIDASI CEK BULAN YANG SAMA
+    let monthIdx = startMonth - 1;
+    let yearCurr = startYear;
+    const proposedPeriods = [];
+
+    for (let i = 0; i < paymentMonths; i++) {
+      const mName = MONTH_NAMES[monthIdx];
+      proposedPeriods.push({ month: mName, year: yearCurr });
+      monthIdx++;
+      if (monthIdx > 11) {
+        monthIdx = 0;
+        yearCurr++;
+      }
+    }
+
+    // Cek apakah ada yang sudah dibayar pada unit ini
+    const existingUnitBills = bills.filter(b => b.houseId === targetHouse.id && b.status === 'PAID');
+    for (let p of proposedPeriods) {
+      const found = existingUnitBills.some(b => b.periodMonth === p.month && b.periodYear === p.year);
+      if (found) {
+        setPaymentError(`Gagal: Iuran untuk bulan ${p.month} ${p.year} sudah pernah dicatat / dibayar sebelumnya untuk unit ini.`);
+        return;
+      }
+    }
 
     const totalAmount = paymentMonths * 5000;
     const nowStr = superAdminCustomDate || new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' });
     const receiptNum = `000${bills.length + 1}/BBAP/${startYear}`;
 
     const updatedBills = [...bills];
-    let monthIdx = startMonth - 1;
-    let yearCurr = startYear;
-
     const periodMonthsText = [];
+
+    monthIdx = startMonth - 1;
+    yearCurr = startYear;
 
     for (let i = 0; i < paymentMonths; i++) {
       const mName = MONTH_NAMES[monthIdx];
@@ -475,6 +563,31 @@ export default function App() {
     setSuperAdminCustomDate('');
   };
 
+  // EDIT KWITANSI / BILL HANDLERS (Hanya Superadmin & Bendahara)
+  const handleSaveBillEdit = (e) => {
+    e.preventDefault();
+    if (!editingBill) return;
+
+    const newAmt = parseFloat(editingBill.amount) || 5000;
+
+    setBills(prev => prev.map(b => {
+      if (b.id === editingBill.id) {
+        return {
+          ...b,
+          periodMonth: editingBill.periodMonth,
+          periodYear: parseInt(editingBill.periodYear),
+          amount: newAmt,
+          status: editingBill.status
+        };
+      }
+      return b;
+    }));
+
+    logActivity('BILL_EDITED', `Edit kwitansi tagihan ID ${editingBill.id}`);
+    setShowEditBillModal(false);
+    setEditingBill(null);
+  };
+
   const handleAddCategory = (e) => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
@@ -489,7 +602,7 @@ export default function App() {
     if (!newExpense.amount || !newExpense.purpose) return;
     const reqObj = {
       id: `exp-${Date.now()}`,
-      requestDate: new Date().toISOString().split('T')[0],
+      requestDate: newExpense.date, // Menggunakan tanggal dari form
       applicantName: `${currentUser.name} (${currentUser.role})`,
       category: newExpense.category,
       amount: parseFloat(newExpense.amount),
@@ -502,23 +615,31 @@ export default function App() {
       approvals: { 'usr-01': null, 'usr-02': null, 'usr-03': null }
     };
     setExpenseRequests((prev) => [reqObj, ...prev]);
-    logActivity('EXPENSE_SUBMITTED', `Pengajuan pengeluaran: ${reqObj.purpose}`);
+    logActivity('EXPENSE_SUBMITTED', `Pengajuan pengeluaran tertanggal ${reqObj.requestDate}: ${reqObj.purpose}`);
     setShowAddExpenseModal(false);
-    setNewExpense({ category: categories[0], amount: '', purpose: '', description: '', proofUrl: '' });
+    setNewExpense({ 
+      date: new Date().toISOString().split('T')[0],
+      category: categories[0], 
+      amount: '', 
+      purpose: '', 
+      description: '', 
+      proofUrl: '' 
+    });
   };
 
   const handleApproveExpense = (expId) => {
+    const approvalDateStr = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' });
     setExpenseRequests(prev => prev.map(e => {
       if (e.id === expId) {
         return {
           ...e,
           status: 'REALIZED',
-          realizedDate: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' })
+          realizedDate: approvalDateStr
         };
       }
       return e;
     }));
-    logActivity('EXPENSE_APPROVED', `Disetujui pengeluaran ID: ${expId}`);
+    logActivity('EXPENSE_APPROVED', `Disetujui dan direalisasikan pengeluaran ID: ${expId}`);
   };
 
   const handleAddUser = (e) => {
@@ -545,7 +666,7 @@ export default function App() {
 
     const setObj = {
       id: `set-${Date.now()}`,
-      date: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+      date: newSettlement.date,
       collectorName: newSettlement.collectorName,
       totalCollected: collected,
       handedAmount: handed,
@@ -555,9 +676,15 @@ export default function App() {
     };
     setCashSettlements((prev) => [setObj, ...prev]);
     setSystemConfig((prev) => ({ ...prev, cashInHand: prev.cashInHand + handed }));
-    logActivity('SETTLEMENT_RECORDED', `Setoran kas dari ${setObj.collectorName}`);
+    logActivity('SETTLEMENT_RECORDED', `Setoran kas dari ${setObj.collectorName} tertanggal ${setObj.date}`);
     setShowSettlementModal(false);
-    setNewSettlement({ collectorName: 'Erus', totalCollected: '', handedAmount: '', notes: '' });
+    setNewSettlement({ 
+      date: new Date().toISOString().split('T')[0], 
+      collectorName: 'Erus', 
+      totalCollected: '', 
+      handedAmount: '', 
+      notes: '' 
+    });
   };
 
   // LOGIN SCREEN
@@ -872,7 +999,7 @@ export default function App() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-5 rounded-3xl shadow-sm gap-4">
                 <div>
                   <h2 className="font-bold text-slate-900 text-base">Pencatatan & Penagihan Iuran Warga</h2>
-                  <p className="text-xs text-slate-500">Sistem Iuran Standar Rp 5.000 / Bulan</p>
+                  <p className="text-xs text-slate-500">Sistem Iuran Standar Rp 5.000 / Bulan (Pencegahan Duplikasi Bulan Aktif)</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
@@ -888,7 +1015,7 @@ export default function App() {
                   </div>
 
                   {['SUPERADMIN', 'PETUGAS', 'BENDAHARA'].includes(currentUser.role) && (
-                    <button onClick={() => setShowPaymentModal(true)} className="w-full sm:w-auto bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap">
+                    <button onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} className="w-full sm:w-auto bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap">
                       <Plus className="w-4 h-4" /> Catat Pembayaran Iuran
                     </button>
                   )}
@@ -1009,7 +1136,7 @@ export default function App() {
                   <table className="w-full text-xs text-left font-mono">
                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b">
                       <tr>
-                        <th className="p-3">Waktu</th>
+                        <th className="p-3">Tanggal Setor</th>
                         <th className="p-3">Petugas Penagih</th>
                         <th className="p-3 text-right">Total Terkumpul</th>
                         <th className="p-3 text-right">Fisik Diserah</th>
@@ -1040,7 +1167,7 @@ export default function App() {
               <div className="flex justify-between items-center bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
                 <div>
                   <h2 className="font-bold text-slate-900 text-base">Pengeluaran & Persetujuan Kas</h2>
-                  <p className="text-xs text-slate-500">Mekanisme Approval Kolektif Pengurus</p>
+                  <p className="text-xs text-slate-500">Mekanisme Approval Kolektif Pengurus (Dilengkapi Tanggal Pengajuan)</p>
                 </div>
                 {['SUPERADMIN', 'BENDAHARA', 'KETUA'].includes(currentUser.role) && (
                   <button onClick={() => setShowAddExpenseModal(true)} className="bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md">
@@ -1059,7 +1186,7 @@ export default function App() {
                     <div key={req.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
                       <div className="flex justify-between items-center border-b pb-3">
                         <div>
-                          <span className="text-[10px] font-mono text-slate-400 uppercase">{req.id}</span>
+                          <span className="text-[10px] font-mono text-slate-400 uppercase">{req.id} • Tgl: {req.requestDate}</span>
                           <h3 className="font-bold text-slate-900 text-sm">{req.purpose}</h3>
                           <p className="text-xs text-slate-500">Kategori: {req.category} • Pengaju: {req.applicantName}</p>
                         </div>
@@ -1172,42 +1299,170 @@ export default function App() {
 
           {activeTab === 'laporan' && (
             <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex justify-between items-center no-print">
+              {/* FILTER BAR & CETAK */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
                 <div>
                   <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
                     <FileText className="w-5 h-5 text-emerald-700" /> Laporan Keuangan Transparan Bersama
                   </h2>
-                  <p className="text-xs text-slate-500">Dapat Diakses Seluruh Warga Perumahan</p>
+                  <p className="text-xs text-slate-500">Pilih rentang waktu laporan harian, bulanan, tahunan, atau keseluruhan</p>
                 </div>
-                <button onClick={() => window.print()} className="bg-slate-900 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md">
-                  <Printer className="w-4 h-4" /> Cetak / Unduh Laporan PDF
-                </button>
+
+                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                  <select 
+                    value={reportFilterType} 
+                    onChange={(e) => setReportFilterType(e.target.value)}
+                    className="text-xs p-2.5 border rounded-xl font-bold bg-slate-50"
+                  >
+                    <option value="ALL">Semua Periode</option>
+                    <option value="DAILY">Harian</option>
+                    <option value="MONTHLY">Bulanan</option>
+                    <option value="YEARLY">Tahunan</option>
+                  </select>
+
+                  {reportFilterType === 'DAILY' && (
+                    <input 
+                      type="date" 
+                      value={reportFilterDate}
+                      onChange={(e) => setReportFilterDate(e.target.value)}
+                      className="text-xs p-2 border rounded-xl font-mono bg-slate-50"
+                    />
+                  )}
+
+                  {reportFilterType === 'MONTHLY' && (
+                    <div className="flex gap-1">
+                      <select 
+                        value={reportFilterMonth} 
+                        onChange={(e) => setReportFilterMonth(e.target.value)}
+                        className="text-xs p-2 border rounded-xl font-bold bg-slate-50"
+                      >
+                        {MONTH_NAMES.map((m, idx) => (
+                          <option key={idx} value={idx + 1}>{m}</option>
+                        ))}
+                      </select>
+                      <select 
+                        value={reportFilterYear} 
+                        onChange={(e) => setReportFilterYear(e.target.value)}
+                        className="text-xs p-2 border rounded-xl font-bold bg-slate-50"
+                      >
+                        <option value="2026">2026</option>
+                        <option value="2027">2027</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {reportFilterType === 'YEARLY' && (
+                    <select 
+                      value={reportFilterYear} 
+                      onChange={(e) => setReportFilterYear(e.target.value)}
+                      className="text-xs p-2 border rounded-xl font-bold bg-slate-50"
+                    >
+                      <option value="2026">2026</option>
+                      <option value="2027">2027</option>
+                    </select>
+                  )}
+
+                  <button onClick={() => window.print()} className="bg-slate-900 hover:bg-slate-800 text-white text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-1.5 shadow-md">
+                    <Printer className="w-4 h-4" /> Cetak PDF
+                  </button>
+                </div>
               </div>
 
+              {/* DOKUMEN LAPORAN UTAMA */}
               <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
                 <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4">
                   <LogoBumiArsakha className="h-16" showSubtext={true} isDarkBg={false} />
                   <div className="text-right">
                     <h3 className="font-serif font-black text-lg text-slate-900 uppercase">LAPORAN KEUANGAN KAS PERUMAHAN</h3>
-                    <p className="text-xs text-slate-600 font-semibold">Periode: 2026</p>
+                    <p className="text-xs text-slate-600 font-semibold uppercase">
+                      Periode Filter: {reportFilterType === 'ALL' ? 'Keseluruhan' : reportFilterType === 'DAILY' ? `Harian (${reportFilterDate})` : reportFilterType === 'MONTHLY' ? `Bulanan (${MONTH_NAMES[reportFilterMonth - 1]} ${reportFilterYear})` : `Tahunan (${reportFilterYear})`}
+                    </p>
                   </div>
                 </div>
 
+                {/* RINGKASAN KEUANGAN */}
                 <div className="grid grid-cols-3 gap-4 font-mono">
                   <div className="bg-slate-50 p-4 rounded-2xl border">
                     <span className="text-[10px] text-slate-500 font-sans block">Total Pemasukan:</span>
-                    <strong className="text-lg font-bold text-emerald-800">{formatIDR(totalOfficialIncome)}</strong>
+                    <strong className="text-lg font-bold text-emerald-800">{formatIDR(filteredTotalIncome)}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-2xl border">
                     <span className="text-[10px] text-slate-500 font-sans block">Total Pengeluaran:</span>
-                    <strong className="text-lg font-bold text-rose-700">{formatIDR(totalRealizedExpense)}</strong>
+                    <strong className="text-lg font-bold text-rose-700">{formatIDR(filteredTotalExpense)}</strong>
                   </div>
                   <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 text-emerald-900">
-                    <span className="text-[10px] text-emerald-800 font-sans block">Saldo Kas Akhir:</span>
-                    <strong className="text-xl font-black text-emerald-800">{formatIDR(finalOfficialCashBalance)}</strong>
+                    <span className="text-[10px] text-emerald-800 font-sans block">Saldo Periode Ini:</span>
+                    <strong className="text-xl font-black text-emerald-800">{formatIDR(filteredNetBalance)}</strong>
                   </div>
                 </div>
 
+                {/* RINCIAN PEMASUKAN */}
+                <div className="space-y-3 pt-2">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-900 border-b pb-1">
+                    A. Rincian Pemasukan Kas
+                  </h4>
+                  <div className="overflow-x-auto">
+                    {filteredIncomes.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-3 italic">Tidak ada data pemasukan pada periode ini.</p>
+                    ) : (
+                      <table className="w-full text-xs text-left font-mono border">
+                        <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b">
+                          <tr>
+                            <th className="p-2.5">Tanggal</th>
+                            <th className="p-2.5">Kategori / Sumber</th>
+                            <th className="p-2.5">Uraian / Keterangan</th>
+                            <th className="p-2.5 text-right">Nominal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {filteredIncomes.map((inc, i) => (
+                            <tr key={i}>
+                              <td className="p-2.5 text-slate-500">{inc.date}</td>
+                              <td className="p-2.5 font-bold font-sans text-slate-800">{inc.category}</td>
+                              <td className="p-2.5 font-sans text-slate-600">{inc.description}</td>
+                              <td className="p-2.5 text-right font-bold text-emerald-700">{formatIDR(inc.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* RINCIAN PENGELUARAN */}
+                <div className="space-y-3 pt-2">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-900 border-b pb-1">
+                    B. Rincian Pengeluaran Kas (Disetujui)
+                  </h4>
+                  <div className="overflow-x-auto">
+                    {filteredExpenses.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-3 italic">Tidak ada data pengeluaran pada periode ini.</p>
+                    ) : (
+                      <table className="w-full text-xs text-left font-mono border">
+                        <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b">
+                          <tr>
+                            <th className="p-2.5">Tanggal Realisasi</th>
+                            <th className="p-2.5">Kategori</th>
+                            <th className="p-2.5">Keperluan & Pengaju</th>
+                            <th className="p-2.5 text-right">Nominal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {filteredExpenses.map((exp, i) => (
+                            <tr key={i}>
+                              <td className="p-2.5 text-slate-500">{exp.realizedDate || exp.requestDate}</td>
+                              <td className="p-2.5 font-bold font-sans text-slate-800">{exp.category}</td>
+                              <td className="p-2.5 font-sans text-slate-600">{exp.purpose} ({exp.applicantName})</td>
+                              <td className="p-2.5 text-right font-bold text-rose-700">{formatIDR(exp.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* TANDA TANGAN & STEMPEL */}
                 <div className="grid grid-cols-3 gap-4 text-center text-xs pt-8 border-t relative items-end">
                   <div className="relative flex flex-col items-center justify-end h-36">
                     <p className="text-slate-500 mb-auto font-medium z-10">Ketua Perumahan,</p>
@@ -1297,6 +1552,71 @@ export default function App() {
                 <input type="number" required value={editingTx.amount} onChange={(e) => setEditingTx({ ...editingTx, amount: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-emerald-800" />
               </div>
               <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Perubahan Transaksi</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDIT KWITANSI/TAGIHAN IURAN (Hanya SuperAdmin & Bendahara) */}
+      {showEditBillModal && editingBill && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Data Kwitansi / Tagihan Iuran</h3>
+              <button onClick={() => setShowEditBillModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveBillEdit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">No. Kwitansi</label>
+                <input type="text" disabled value={editingBill.receiptNo} className="w-full text-xs p-2.5 border rounded-xl bg-slate-100 font-mono font-bold" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Bulan</label>
+                  <select 
+                    value={editingBill.periodMonth} 
+                    onChange={(e) => setEditingBill({ ...editingBill, periodMonth: e.target.value })}
+                    className="w-full text-xs p-2.5 border rounded-xl font-bold bg-white"
+                  >
+                    {MONTH_NAMES.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tahun</label>
+                  <select 
+                    value={editingBill.periodYear} 
+                    onChange={(e) => setEditingBill({ ...editingBill, periodYear: e.target.value })}
+                    className="w-full text-xs p-2.5 border rounded-xl font-bold bg-white"
+                  >
+                    <option value={2026}>2026</option>
+                    <option value={2027}>2027</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal (Rp)</label>
+                <input 
+                  type="number" 
+                  required 
+                  value={editingBill.amount} 
+                  onChange={(e) => setEditingBill({ ...editingBill, amount: e.target.value })} 
+                  className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-emerald-800" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                <select 
+                  value={editingBill.status} 
+                  onChange={(e) => setEditingBill({ ...editingBill, status: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-bold bg-white"
+                >
+                  <option value="PAID">PAID (Lunas)</option>
+                  <option value="EXEMPTED">EXEMPTED (Bebas / Dispensasi)</option>
+                </select>
+              </div>
+              <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Perubahan Kwitansi</button>
             </form>
           </div>
         </div>
@@ -1451,7 +1771,7 @@ export default function App() {
       {/* MODAL REKAPAN "SELENGKAPNYA" PER UNIT */}
       {showDetailsModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3">
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">Rekapan Pembayaran Iuran Warga</h3>
@@ -1478,7 +1798,7 @@ export default function App() {
                       <th className="p-2.5">Tanggal Bayar</th>
                       <th className="p-2.5 text-right">Nominal</th>
                       <th className="p-2.5 text-center">Status</th>
-                      <th className="p-2.5 text-center">Kwitansi</th>
+                      <th className="p-2.5 text-center">Aksi (Kwitansi / Edit)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y font-mono">
@@ -1498,12 +1818,22 @@ export default function App() {
                             </span>
                           </td>
                           <td className="p-2.5 text-center font-sans">
-                            <button
-                              onClick={() => setSelectedReceipt({ bill: b, house: showDetailsModal })}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 shadow-sm"
-                            >
-                              <FileText className="w-3 h-3" /> Lihat Kwitansi
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => setSelectedReceipt({ bill: b, house: showDetailsModal })}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 shadow-sm"
+                              >
+                                <FileText className="w-3 h-3" /> Kwitansi
+                              </button>
+                              {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                                <button
+                                  onClick={() => { setEditingBill(b); setShowEditBillModal(true); }}
+                                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 border border-slate-300"
+                                >
+                                  <Edit className="w-3 h-3" /> Edit
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1582,6 +1912,14 @@ export default function App() {
               <h3 className="font-bold text-slate-900 text-sm">Pencatatan Pembayaran Iuran</h3>
               <button onClick={() => setShowPaymentModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
             </div>
+
+            {paymentError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{paymentError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleRecordPayment} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Pilih Unit Rumah</label>
@@ -1784,6 +2122,10 @@ export default function App() {
             </div>
             <form onSubmit={handleAddExpenseRequest} className="space-y-3">
               <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Pengajuan</label>
+                <input type="date" required value={newExpense.date} onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Kategori</label>
                 <select value={newExpense.category} onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold">
                   {categories.map((cat, idx) => (
@@ -1818,6 +2160,10 @@ export default function App() {
               <button onClick={() => setShowSettlementModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleRecordSettlement} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Setoran</label>
+                <input type="date" required value={newSettlement.date} onChange={(e) => setNewSettlement({ ...newSettlement, date: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Petugas Penagih</label>
                 <input type="text" required value={newSettlement.collectorName} onChange={(e) => setNewSettlement({ ...newSettlement, collectorName: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold" />
