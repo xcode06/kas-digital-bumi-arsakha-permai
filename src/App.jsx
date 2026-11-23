@@ -111,7 +111,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // APP DATA STATE (AUTOSAVE KE CLOUD + CADANGAN LOKAL)
+  // PENYIMPANAN & SINKRONISASI DATA (AUTOSAVE KE CLOUD + CADANGAN LOKAL)
   useEffect(() => startCloudSync(), []);
   const [users, setUsers] = useCloudState('users', INITIAL_USERS);
   const [houses, setHouses] = useCloudState('houses', INITIAL_HOUSES);
@@ -125,6 +125,10 @@ export default function App() {
   // SEARCH STATES
   const [houseSearchQuery, setHouseSearchQuery] = useState('');
   const [iuranSearchQuery, setIuranSearchQuery] = useState('');
+  const [backupFeedback, setBackupFeedback] = useState(null);
+  const [iuranBackupFeedback, setIuranBackupFeedback] = useState(null);
+  const houseFileInputRef = React.useRef(null);
+  const iuranFileInputRef = React.useRef(null);
 
   // LAPORAN FILTER STATES
   const [reportFilterType, setReportFilterType] = useState('ALL'); // 'ALL' | 'DAILY' | 'MONTHLY' | 'YEARLY'
@@ -143,6 +147,18 @@ export default function App() {
     bankBalance: 0
   });
 
+  // NOTIFIKASI PENGINGAT (TEXT BERJALAN DI DASHBOARD)
+  const [announcements, setAnnouncements] = useCloudState('announcements', [
+    {
+      id: 'ann-1',
+      text: 'Selamat datang di Sistem Kas Digital Perumahan Bumi Arsakha Permai. Pembayaran iuran bulanan paling lambat tanggal 10 setiap bulannya.',
+      updatedAt: '2026-10-01'
+    }
+  ]);
+
+  // RIWAYAT INPUT SALDO REKENING BANK (REKONSILIASI)
+  const [bankBalanceEntries, setBankBalanceEntries] = useCloudState('bankBalanceEntries', []);
+
   // MODAL STATES
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -158,6 +174,9 @@ export default function App() {
   const [showEditTxModal, setShowEditTxModal] = useState(false);
   const [showResetTxModal, setShowResetTxModal] = useState(false);
   const [showEditBillModal, setShowEditBillModal] = useState(false);
+  const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [showBankBalanceModal, setShowBankBalanceModal] = useState(false);
 
   // FORM STATES
   const [newUser, setNewUser] = useState({ username: '', name: '', role: 'WARGA', password: 'password123' });
@@ -165,19 +184,38 @@ export default function App() {
   const [editingHouse, setEditingHouse] = useState(null);
   const [editingCategory, setEditingCategory] = useState({ index: -1, oldName: '', newName: '' });
   const [editingBill, setEditingBill] = useState(null);
+  const [editingExpense, setEditingExpense] = useState(null);
   const [paymentError, setPaymentError] = useState('');
+  const [confirmDeleteBillId, setConfirmDeleteBillId] = useState(null);
+  const [confirmDeleteExpenseId, setConfirmDeleteExpenseId] = useState(null);
+  const [confirmDeleteAnnId, setConfirmDeleteAnnId] = useState(null);
+  const [confirmDeleteBankId, setConfirmDeleteBankId] = useState(null);
 
-  const [newSettlement, setNewSettlement] = useState({ 
-    date: new Date().toISOString().split('T')[0], 
-    collectorName: 'Erus', 
-    totalCollected: '', 
-    handedAmount: '', 
-    notes: '' 
+  // FORM NOTIFIKASI PENGINGAT (TEXT BERJALAN)
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+  const [announcementText, setAnnouncementText] = useState('');
+
+  // FORM SALDO REKENING BANK
+  const [editingBankEntry, setEditingBankEntry] = useState(null);
+  const [bankEntryForm, setBankEntryForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    bankName: 'Bank Mandiri',
+    accountNo: '123-456-7890',
+    amount: '',
+    notes: ''
+  });
+
+  const [newSettlement, setNewSettlement] = useState({
+    date: new Date().toISOString().split('T')[0],
+    collectorName: 'Erus',
+    totalCollected: '',
+    handedAmount: '',
+    notes: ''
   });
   const [newHouse, setNewHouse] = useState({ block: 'Blok A', number: '', residentName: '', phone: '' });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingTx, setEditingTx] = useState(null);
-  
+
   // PEMASUKAN LAIN
   const [newOtherIncome, setNewOtherIncome] = useState({
     source: 'Sumbangan Donatur / Kas Lain',
@@ -195,13 +233,13 @@ export default function App() {
   const [superAdminCustomStatus, setSuperAdminCustomStatus] = useState('PAID');
   const [superAdminCustomDate, setSuperAdminCustomDate] = useState('');
 
-  const [newExpense, setNewExpense] = useState({ 
+  const [newExpense, setNewExpense] = useState({
     date: new Date().toISOString().split('T')[0],
-    category: INITIAL_EXPENSE_CATEGORIES[0], 
-    amount: '', 
-    purpose: '', 
-    description: '', 
-    proofUrl: '' 
+    category: INITIAL_EXPENSE_CATEGORIES[0],
+    amount: '',
+    purpose: '',
+    description: '',
+    proofUrl: ''
   });
   const [openingBalance] = useState(0);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
@@ -264,7 +302,7 @@ export default function App() {
   // FILTERED REPORT DATA
   const filteredIncomes = useMemo(() => {
     return incomes.filter(inc => {
-      const incDate = inc.date.split(' ')[0]; // format YYYY-MM-DD
+      const incDate = inc.date.split(' ')[0];
       const [y, m] = incDate.split('-');
       if (reportFilterType === 'DAILY') {
         return incDate === reportFilterDate;
@@ -300,6 +338,24 @@ export default function App() {
   const filteredTotalIncome = useMemo(() => filteredIncomes.reduce((acc, curr) => acc + curr.amount, 0), [filteredIncomes]);
   const filteredTotalExpense = useMemo(() => filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0), [filteredExpenses]);
   const filteredNetBalance = useMemo(() => filteredTotalIncome - filteredTotalExpense, [filteredTotalIncome, filteredTotalExpense]);
+
+  // DATA UNIT & TAGIHAN KHUSUS PENGGUNA WARGA YANG SEDANG LOGIN
+  const currentWargaHouses = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'WARGA') return [];
+    const nameLower = currentUser.name.trim().toLowerCase();
+    const matched = houses.filter((h) => h.residentName.trim().toLowerCase() === nameLower);
+    return matched.length > 0
+      ? matched
+      : houses.filter((h) => h.residentName.trim().toLowerCase().includes(nameLower));
+  }, [currentUser, houses]);
+
+  const currentWargaBills = useMemo(() => {
+    if (currentWargaHouses.length === 0) return [];
+    const houseIds = new Set(currentWargaHouses.map((h) => h.id));
+    return bills
+      .filter((b) => houseIds.has(b.houseId))
+      .sort((a, b) => new Date(b.paidAt) - new Date(a.paidAt));
+  }, [currentWargaHouses, bills]);
 
   // HANDLERS EDIT DAN RESET TRANSAKSI
   const handleEditTxOpen = (tx) => {
@@ -358,9 +414,140 @@ export default function App() {
     setBills([]);
     setExpenseRequests([]);
     setCashSettlements([]);
+    setBankBalanceEntries([]);
     setSystemConfig(prev => ({ ...prev, cashInHand: 0, bankBalance: 0 }));
     logActivity('TRANSACTIONS_RESET', 'Semua aktivitas transaksi kas di-reset menjadi 0.');
     setShowResetTxModal(false);
+  };
+
+  // HANDLERS NOTIFIKASI PENGINGAT (TEXT BERJALAN)
+  const handleOpenAddAnnouncement = () => {
+    setEditingAnnouncement(null);
+    setAnnouncementText('');
+    setShowAnnouncementModal(true);
+  };
+
+  const handleOpenEditAnnouncement = (ann) => {
+    setEditingAnnouncement(ann);
+    setAnnouncementText(ann.text);
+    setShowAnnouncementModal(true);
+  };
+
+  const handleSaveAnnouncement = (e) => {
+    e.preventDefault();
+    if (!announcementText.trim()) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (editingAnnouncement) {
+      setAnnouncements((prev) =>
+        prev.map((a) =>
+          a.id === editingAnnouncement.id ? { ...a, text: announcementText.trim(), updatedAt: todayStr } : a
+        )
+      );
+      logActivity('ANNOUNCEMENT_UPDATED', `Edit teks berjalan: "${announcementText.trim()}"`);
+    } else {
+      const newAnn = {
+        id: `ann-${Date.now()}`,
+        text: announcementText.trim(),
+        updatedAt: todayStr
+      };
+      setAnnouncements((prev) => [newAnn, ...prev]);
+      logActivity('ANNOUNCEMENT_ADDED', `Tambah teks berjalan: "${newAnn.text}"`);
+    }
+    setShowAnnouncementModal(false);
+    setEditingAnnouncement(null);
+    setAnnouncementText('');
+  };
+
+  const handleDeleteAnnouncement = (annId) => {
+    setAnnouncements((prev) => prev.filter((a) => a.id !== annId));
+    logActivity('ANNOUNCEMENT_DELETED', `Hapus teks berjalan ID: ${annId}`);
+    setConfirmDeleteAnnId(null);
+  };
+
+  // HANDLERS SALDO REKENING BANK (REKONSILIASI KAS)
+  const totalBankBalanceFromEntries = useMemo(() => {
+    if (bankBalanceEntries.length === 0) return systemConfig.bankBalance || 0;
+    return bankBalanceEntries.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+  }, [bankBalanceEntries, systemConfig.bankBalance]);
+
+  const handleOpenAddBankBalance = () => {
+    setEditingBankEntry(null);
+    setBankEntryForm({
+      date: new Date().toISOString().split('T')[0],
+      bankName: systemConfig.bankName || 'Bank Mandiri',
+      accountNo: systemConfig.bankAccountNo || '123-456-7890',
+      amount: '',
+      notes: ''
+    });
+    setShowBankBalanceModal(true);
+  };
+
+  const handleOpenEditBankBalance = (entry) => {
+    setEditingBankEntry(entry);
+    setBankEntryForm({
+      date: entry.date,
+      bankName: entry.bankName,
+      accountNo: entry.accountNo,
+      amount: entry.amount.toString(),
+      notes: entry.notes || ''
+    });
+    setShowBankBalanceModal(true);
+  };
+
+  const handleSaveBankBalance = (e) => {
+    e.preventDefault();
+    const numericAmt = parseFloat(bankEntryForm.amount);
+    if (isNaN(numericAmt)) return;
+
+    let nextEntries = [];
+    if (editingBankEntry) {
+      nextEntries = bankBalanceEntries.map((item) =>
+        item.id === editingBankEntry.id
+          ? {
+              ...item,
+              date: bankEntryForm.date,
+              bankName: bankEntryForm.bankName.trim() || 'Bank Mandiri',
+              accountNo: bankEntryForm.accountNo.trim() || '-',
+              amount: numericAmt,
+              notes: bankEntryForm.notes.trim() || '-'
+            }
+          : item
+      );
+      logActivity('BANK_BALANCE_UPDATED', `Edit saldo rekening bank (${bankEntryForm.bankName}) menjadi ${formatIDR(numericAmt)}`);
+    } else {
+      const newEntry = {
+        id: `bank-${Date.now()}`,
+        date: bankEntryForm.date,
+        bankName: bankEntryForm.bankName.trim() || 'Bank Mandiri',
+        accountNo: bankEntryForm.accountNo.trim() || '-',
+        amount: numericAmt,
+        notes: bankEntryForm.notes.trim() || '-',
+        updatedBy: currentUser?.name || 'Bendahara'
+      };
+      nextEntries = [newEntry, ...bankBalanceEntries];
+      logActivity('BANK_BALANCE_ADDED', `Input saldo rekening bank (${newEntry.bankName}): ${formatIDR(numericAmt)}`);
+    }
+
+    setBankBalanceEntries(nextEntries);
+    const updatedTotal = nextEntries.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
+    setSystemConfig((prev) => ({
+      ...prev,
+      bankName: bankEntryForm.bankName.trim() || prev.bankName,
+      bankAccountNo: bankEntryForm.accountNo.trim() || prev.bankAccountNo,
+      bankBalance: updatedTotal
+    }));
+
+    setShowBankBalanceModal(false);
+    setEditingBankEntry(null);
+  };
+
+  const handleDeleteBankBalance = (entryId) => {
+    const nextEntries = bankBalanceEntries.filter((item) => item.id !== entryId);
+    setBankBalanceEntries(nextEntries);
+    const updatedTotal = nextEntries.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
+    setSystemConfig((prev) => ({ ...prev, bankBalance: updatedTotal }));
+    logActivity('BANK_BALANCE_DELETED', `Hapus entri saldo rekening bank ID: ${entryId}`);
+    setConfirmDeleteBankId(null);
   };
 
   // HANDLERS
@@ -395,6 +582,289 @@ export default function App() {
     const target = houses.find(h => h.id === houseId);
     setHouses(prev => prev.filter(h => h.id !== houseId));
     logActivity('HOUSE_DELETED', `Hapus unit rumah ${target?.block} No. ${target?.number}`);
+  };
+
+  // BACKUP & RESTORE DATA WARGA & UNIT RUMAH
+  const handleDownloadHousesBackup = () => {
+    try {
+      const backupPayload = {
+        app: 'Kas Digital Perumahan Bumi Arsakha Permai',
+        type: 'BACKUP_DATA_WARGA_RUMAH',
+        exportedAt: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+        exportedBy: currentUser?.name || 'System',
+        totalUnits: houses.length,
+        data: houses
+      };
+      const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStamp = new Date().toISOString().split('T')[0];
+      a.href = url;
+      a.download = `backup-data-warga-bumi-arsakha-${dateStamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setBackupFeedback({
+        type: 'success',
+        message: `Backup berhasil diunduh (${houses.length} unit rumah).`
+      });
+      logActivity('HOUSE_BACKUP_EXPORTED', `Download backup data warga & unit rumah (${houses.length} unit).`);
+    } catch (err) {
+      setBackupFeedback({
+        type: 'error',
+        message: 'Gagal mengunduh file backup data warga.'
+      });
+    }
+  };
+
+  const handleImportHousesBackup = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result);
+        const importedList = Array.isArray(parsed) ? parsed : parsed?.data;
+
+        if (!Array.isArray(importedList)) {
+          setBackupFeedback({
+            type: 'error',
+            message: 'Format file tidak valid. Pastikan memilih file backup JSON Data Warga yang benar.'
+          });
+          return;
+        }
+
+        const sanitizedHouses = importedList
+          .filter((item) => item && item.block && item.number && item.residentName)
+          .map((item, idx) => ({
+            id: item.id || `h-imp-${Date.now()}-${idx}`,
+            block: String(item.block),
+            number: String(item.number),
+            residentName: String(item.residentName),
+            phone: item.phone ? String(item.phone) : '-',
+            isMandatory: item.isMandatory !== undefined ? Boolean(item.isMandatory) : true,
+            collector: item.collector ? String(item.collector) : 'Erus'
+          }));
+
+        if (sanitizedHouses.length === 0) {
+          setBackupFeedback({
+            type: 'error',
+            message: 'File backup tidak memiliki data unit rumah yang valid.'
+          });
+          return;
+        }
+
+        let addedCount = 0;
+        let updatedCount = 0;
+
+        setHouses((prev) => {
+          const merged = [...prev];
+          sanitizedHouses.forEach((imp) => {
+            const existingIdx = merged.findIndex(
+              (h) =>
+                h.id === imp.id ||
+                (h.block.trim().toLowerCase() === imp.block.trim().toLowerCase() &&
+                  h.number.trim().toLowerCase() === imp.number.trim().toLowerCase())
+            );
+            if (existingIdx > -1) {
+              merged[existingIdx] = { ...merged[existingIdx], ...imp, id: merged[existingIdx].id };
+              updatedCount++;
+            } else {
+              merged.push(imp);
+              addedCount++;
+            }
+          });
+          return merged;
+        });
+
+        setBackupFeedback({
+          type: 'success',
+          message: `Import otomatis berhasil: ${addedCount} unit baru ditambahkan, ${updatedCount} unit diperbarui.`
+        });
+        logActivity(
+          'HOUSE_BACKUP_IMPORTED',
+          `Import backup data warga: +${addedCount} baru, ${updatedCount} diperbarui.`
+        );
+      } catch (err) {
+        setBackupFeedback({
+          type: 'error',
+          message: 'Gagal membaca file JSON. Pastikan file tidak rusak.'
+        });
+      } finally {
+        if (houseFileInputRef.current) {
+          houseFileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // BACKUP & RESTORE DATA IURAN WARGA (KHUSUS SUPERADMIN & BENDAHARA)
+  const handleDownloadIuranBackup = () => {
+    try {
+      const iuranIncomes = incomes.filter(
+        (inc) => inc.category === 'Iuran Bulanan Warga' || bills.some((b) => b.receiptNo === inc.refNo)
+      );
+      const backupPayload = {
+        app: 'Kas Digital Perumahan Bumi Arsakha Permai',
+        type: 'BACKUP_DATA_IURAN_WARGA',
+        exportedAt: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+        exportedBy: currentUser?.name || 'System',
+        totalBills: bills.length,
+        data: {
+          bills,
+          incomes: iuranIncomes
+        }
+      };
+      const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStamp = new Date().toISOString().split('T')[0];
+      a.href = url;
+      a.download = `backup-data-iuran-bumi-arsakha-${dateStamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setIuranBackupFeedback({
+        type: 'success',
+        message: `Backup iuran berhasil diunduh (${bills.length} catatan tagihan).`
+      });
+      logActivity('IURAN_BACKUP_EXPORTED', `Download backup data iuran warga (${bills.length} catatan).`);
+    } catch (err) {
+      setIuranBackupFeedback({
+        type: 'error',
+        message: 'Gagal mengunduh file backup data iuran.'
+      });
+    }
+  };
+
+  const handleImportIuranBackup = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result);
+        const importedBills = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.data?.bills)
+          ? parsed.data.bills
+          : Array.isArray(parsed?.bills)
+          ? parsed.bills
+          : null;
+        const importedIncomes = Array.isArray(parsed?.data?.incomes)
+          ? parsed.data.incomes
+          : Array.isArray(parsed?.incomes)
+          ? parsed.incomes
+          : [];
+
+        if (!importedBills) {
+          setIuranBackupFeedback({
+            type: 'error',
+            message: 'Format file tidak valid. Pastikan memilih file backup JSON Data Iuran yang benar.'
+          });
+          return;
+        }
+
+        const sanitizedBills = importedBills
+          .filter((b) => b && b.houseId && b.periodMonth && b.periodYear)
+          .map((b, idx) => ({
+            id: b.id || `b-imp-${Date.now()}-${idx}`,
+            houseId: String(b.houseId),
+            periodMonth: String(b.periodMonth),
+            periodYear: Number(b.periodYear),
+            amount: Number(b.amount) || 5000,
+            status: b.status || 'PAID',
+            receiptNo: b.receiptNo || `IMP-${Date.now()}-${idx}`,
+            paidAt: b.paidAt || new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+            collectorName: b.collectorName || 'Erus'
+          }));
+
+        if (sanitizedBills.length === 0) {
+          setIuranBackupFeedback({
+            type: 'error',
+            message: 'File backup tidak memiliki data tagihan iuran yang valid.'
+          });
+          return;
+        }
+
+        let addedBills = 0;
+        let updatedBills = 0;
+
+        setBills((prev) => {
+          const merged = [...prev];
+          sanitizedBills.forEach((imp) => {
+            const existingIdx = merged.findIndex(
+              (b) =>
+                b.id === imp.id ||
+                (b.houseId === imp.houseId &&
+                  b.periodMonth.toLowerCase() === imp.periodMonth.toLowerCase() &&
+                  Number(b.periodYear) === Number(imp.periodYear))
+            );
+            if (existingIdx > -1) {
+              merged[existingIdx] = { ...merged[existingIdx], ...imp, id: merged[existingIdx].id };
+              updatedBills++;
+            } else {
+              merged.push(imp);
+              addedBills++;
+            }
+          });
+          return merged;
+        });
+
+        if (importedIncomes.length > 0) {
+          setIncomes((prev) => {
+            const mergedInc = [...prev];
+            importedIncomes.forEach((impInc, idx) => {
+              if (!impInc || !impInc.amount) return;
+              const sanitizedInc = {
+                id: impInc.id || `inc-imp-${Date.now()}-${idx}`,
+                date: impInc.date || new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+                category: impInc.category || 'Iuran Bulanan Warga',
+                amount: Number(impInc.amount),
+                description: impInc.description || 'Restored Iuran Warga',
+                refNo: impInc.refNo || '',
+                verifier: impInc.verifier || 'Yana'
+              };
+              const idxFound = mergedInc.findIndex(
+                (x) => x.id === sanitizedInc.id || (sanitizedInc.refNo && x.refNo === sanitizedInc.refNo)
+              );
+              if (idxFound > -1) {
+                mergedInc[idxFound] = { ...mergedInc[idxFound], ...sanitizedInc, id: mergedInc[idxFound].id };
+              } else {
+                mergedInc.unshift(sanitizedInc);
+              }
+            });
+            return mergedInc;
+          });
+        }
+
+        setIuranBackupFeedback({
+          type: 'success',
+          message: `Restore otomatis berhasil: ${addedBills} tagihan baru ditambahkan, ${updatedBills} tagihan diperbarui.`
+        });
+        logActivity(
+          'IURAN_BACKUP_IMPORTED',
+          `Restore backup data iuran: +${addedBills} baru, ${updatedBills} diperbarui.`
+        );
+      } catch (err) {
+        setIuranBackupFeedback({
+          type: 'error',
+          message: 'Gagal membaca file JSON backup iuran. Pastikan file tidak rusak.'
+        });
+      } finally {
+        if (iuranFileInputRef.current) {
+          iuranFileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleUpdateUser = (e) => {
@@ -470,7 +940,6 @@ export default function App() {
     const targetHouse = houses.find((h) => h.id === selectedHouseForPayment);
     if (!targetHouse) return;
 
-    // VALIDASI CEK BULAN YANG SAMA
     let monthIdx = startMonth - 1;
     let yearCurr = startYear;
     const proposedPeriods = [];
@@ -485,7 +954,6 @@ export default function App() {
       }
     }
 
-    // Cek apakah ada yang sudah dibayar pada unit ini
     const existingUnitBills = bills.filter(b => b.houseId === targetHouse.id && b.status === 'PAID');
     for (let p of proposedPeriods) {
       const found = existingUnitBills.some(b => b.periodMonth === p.month && b.periodYear === p.year);
@@ -529,7 +997,7 @@ export default function App() {
     }
     setBills(updatedBills);
 
-    const periodDesc = periodMonthsText.length > 1 
+    const periodDesc = periodMonthsText.length > 1
       ? `${periodMonthsText[0]} s/d ${periodMonthsText[periodMonthsText.length - 1]}`
       : periodMonthsText[0];
 
@@ -588,6 +1056,28 @@ export default function App() {
     setEditingBill(null);
   };
 
+  // HAPUS KWITANSI / BILL HANDLER (Hanya Superadmin & Bendahara)
+  const handleDeleteBill = (billId) => {
+    const targetBill = bills.find(b => b.id === billId);
+    if (!targetBill) return;
+
+    const remainingBills = bills.filter(b => b.id !== billId);
+    setBills(remainingBills);
+
+    if (targetBill.receiptNo) {
+      const sameReceiptBills = remainingBills.filter(b => b.receiptNo === targetBill.receiptNo);
+      if (sameReceiptBills.length === 0) {
+        setIncomes(prev => prev.filter(inc => inc.refNo !== targetBill.receiptNo));
+      } else {
+        const updatedTotal = sameReceiptBills.reduce((acc, b) => acc + b.amount, 0);
+        setIncomes(prev => prev.map(inc => inc.refNo === targetBill.receiptNo ? { ...inc, amount: updatedTotal } : inc));
+      }
+    }
+
+    logActivity('BILL_DELETED', `Hapus data tagihan iuran ${targetBill.periodMonth} ${targetBill.periodYear} (${targetBill.receiptNo})`);
+    setConfirmDeleteBillId(null);
+  };
+
   const handleAddCategory = (e) => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
@@ -599,47 +1089,105 @@ export default function App() {
 
   const handleAddExpenseRequest = (e) => {
     e.preventDefault();
-    if (!newExpense.amount || !newExpense.purpose) return;
+    const numericAmount = parseFloat(newExpense.amount);
+    if (!numericAmount || numericAmount <= 0 || !newExpense.purpose.trim()) return;
+    const selectedCategory = newExpense.category || categories[0] || 'Administrasi & ATK';
     const reqObj = {
       id: `exp-${Date.now()}`,
-      requestDate: newExpense.date, // Menggunakan tanggal dari form
+      requestDate: newExpense.date || new Date().toISOString().split('T')[0],
       applicantName: `${currentUser.name} (${currentUser.role})`,
-      category: newExpense.category,
-      amount: parseFloat(newExpense.amount),
-      purpose: newExpense.purpose,
-      description: newExpense.description || '-',
+      category: selectedCategory,
+      amount: numericAmount,
+      purpose: newExpense.purpose.trim(),
+      description: newExpense.description?.trim() || '-',
       proofUrl: newExpense.proofUrl || '',
       status: 'PENDING',
       realizedDate: null,
       realizedProofUrl: null,
-      approvals: { 'usr-01': null, 'usr-02': null, 'usr-03': null }
+      approvals: { KETUA: null, SEKRETARIS: null, BENDAHARA: null }
     };
     setExpenseRequests((prev) => [reqObj, ...prev]);
     logActivity('EXPENSE_SUBMITTED', `Pengajuan pengeluaran tertanggal ${reqObj.requestDate}: ${reqObj.purpose}`);
     setShowAddExpenseModal(false);
-    setNewExpense({ 
+    setNewExpense({
       date: new Date().toISOString().split('T')[0],
-      category: categories[0], 
-      amount: '', 
-      purpose: '', 
-      description: '', 
-      proofUrl: '' 
+      category: categories[0] || INITIAL_EXPENSE_CATEGORIES[0],
+      amount: '',
+      purpose: '',
+      description: '',
+      proofUrl: ''
     });
   };
 
-  const handleApproveExpense = (expId) => {
+  // EDIT PENGELUARAN KAS (Hanya Bendahara & SuperAdmin)
+  const handleSaveExpenseEdit = (e) => {
+    e.preventDefault();
+    if (!editingExpense || !editingExpense.amount || !editingExpense.purpose) return;
+
+    const updatedAmt = parseFloat(editingExpense.amount);
+    setExpenseRequests(prev => prev.map(exp => {
+      if (exp.id === editingExpense.id) {
+        return {
+          ...exp,
+          requestDate: editingExpense.requestDate,
+          category: editingExpense.category,
+          amount: updatedAmt,
+          purpose: editingExpense.purpose,
+          description: editingExpense.description || '-'
+        };
+      }
+      return exp;
+    }));
+
+    logActivity('EXPENSE_EDITED', `Edit pengajuan pengeluaran ID ${editingExpense.id} (${editingExpense.purpose})`);
+    setShowEditExpenseModal(false);
+    setEditingExpense(null);
+  };
+
+  // HAPUS PENGELUARAN KAS (Hanya Bendahara & SuperAdmin)
+  const handleDeleteExpense = (expId) => {
+    const targetExp = expenseRequests.find(e => e.id === expId);
+    setExpenseRequests(prev => prev.filter(e => e.id !== expId));
+    logActivity('EXPENSE_DELETED', `Hapus pengeluaran ID ${expId} (${targetExp?.purpose || '-'})`);
+    setConfirmDeleteExpenseId(null);
+  };
+
+  // APPROVAL BERJENJANG 3 PENGURUS INTI: KETUA -> SEKRETARIS -> BENDAHARA
+  const handleApproveExpenseRole = (expId, targetRole) => {
     const approvalDateStr = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' });
     setExpenseRequests(prev => prev.map(e => {
       if (e.id === expId) {
+        const currentApprovals = {
+          KETUA: e.approvals?.KETUA || null,
+          SEKRETARIS: e.approvals?.SEKRETARIS || null,
+          BENDAHARA: e.approvals?.BENDAHARA || null
+        };
+
+        const updatedApprovals = {
+          ...currentApprovals,
+          [targetRole]: {
+            approved: true,
+            by: currentUser.name,
+            at: approvalDateStr
+          }
+        };
+
+        const allThreeApproved = Boolean(
+          updatedApprovals.KETUA?.approved &&
+          updatedApprovals.SEKRETARIS?.approved &&
+          updatedApprovals.BENDAHARA?.approved
+        );
+
         return {
           ...e,
-          status: 'REALIZED',
-          realizedDate: approvalDateStr
+          approvals: updatedApprovals,
+          status: allThreeApproved ? 'REALIZED' : 'PENDING',
+          realizedDate: allThreeApproved ? approvalDateStr : null
         };
       }
       return e;
     }));
-    logActivity('EXPENSE_APPROVED', `Disetujui dan direalisasikan pengeluaran ID: ${expId}`);
+    logActivity('EXPENSE_ROLE_APPROVED', `Persetujuan ${targetRole} oleh ${currentUser.name} untuk pengeluaran ID: ${expId}`);
   };
 
   const handleAddUser = (e) => {
@@ -678,12 +1226,12 @@ export default function App() {
     setSystemConfig((prev) => ({ ...prev, cashInHand: prev.cashInHand + handed }));
     logActivity('SETTLEMENT_RECORDED', `Setoran kas dari ${setObj.collectorName} tertanggal ${setObj.date}`);
     setShowSettlementModal(false);
-    setNewSettlement({ 
-      date: new Date().toISOString().split('T')[0], 
-      collectorName: 'Erus', 
-      totalCollected: '', 
-      handedAmount: '', 
-      notes: '' 
+    setNewSettlement({
+      date: new Date().toISOString().split('T')[0],
+      collectorName: 'Erus',
+      totalCollected: '',
+      handedAmount: '',
+      notes: ''
     });
   };
 
@@ -748,9 +1296,10 @@ export default function App() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard Kas', icon: Home, show: true },
+    { id: 'iuran_warga', label: 'Rincian Iuran Saya', icon: DollarSign, show: currentUser.role === 'WARGA' },
     { id: 'warga', label: 'Data Warga & Rumah', icon: Users, show: true },
-    { id: 'iuran', label: 'Penarikan Iuran', icon: DollarSign, show: ['SUPERADMIN', 'PETUGAS', 'BENDAHARA', 'KETUA'].includes(currentUser.role) },
-    { id: 'rekonsiliasi', label: 'Setoran & Rekonsiliasi Kas', icon: RefreshCw, show: ['SUPERADMIN', 'BENDAHARA', 'PETUGAS', 'KETUA'].includes(currentUser.role) },
+    { id: 'iuran', label: 'Penarikan Iuran', icon: DollarSign, show: ['SUPERADMIN', 'PETUGAS', 'BENDAHARA', 'KETUA', 'SEKRETARIS', 'ADMIN'].includes(currentUser.role) },
+    { id: 'rekonsiliasi', label: 'Setoran & Rekonsiliasi Kas', icon: RefreshCw, show: ['SUPERADMIN', 'BENDAHARA', 'PETUGAS', 'KETUA', 'SEKRETARIS', 'ADMIN'].includes(currentUser.role) },
     { id: 'pengeluaran', label: 'Pengeluaran Kas', icon: FileText, show: ['SUPERADMIN', 'BENDAHARA', 'KETUA', 'SEKRETARIS'].includes(currentUser.role) },
     { id: 'laporan', label: 'Laporan Keuangan', icon: Printer, show: true },
     { id: 'master', label: 'Kontrol Master & Pengaturan', icon: Key, show: ['SUPERADMIN', 'ADMIN'].includes(currentUser.role) },
@@ -759,7 +1308,66 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
-      <header className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white border-b border-emerald-700/50 sticky top-0 z-30 shadow-md no-print">
+      {/* STYLE PRINT KHUSUS KWITANSI & LAPORAN KEUANGAN */}
+      <style>{`
+        @media print {
+          @page {
+            size: auto;
+            margin: 12mm;
+          }
+          body {
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-hide-when-receipt-open {
+            display: none !important;
+          }
+          .print-receipt-modal-wrapper {
+            position: static !important;
+            inset: auto !important;
+            background: transparent !important;
+            backdrop-filter: none !important;
+            padding: 0 !important;
+            display: block !important;
+          }
+          .print-receipt-modal-box {
+            box-shadow: none !important;
+            border: none !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
+          }
+          .print-report-container {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            width: 100% !important;
+          }
+        }
+        @keyframes marqueeScroll {
+          0% {
+            transform: translateX(100%);
+          }
+          100% {
+            transform: translateX(-100%);
+          }
+        }
+        .animate-marquee-text {
+          display: inline-block;
+          white-space: nowrap;
+          animation: marqueeScroll 24s linear infinite;
+        }
+        .animate-marquee-text:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
+
+      <header className={`bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white border-b border-emerald-700/50 sticky top-0 z-30 shadow-md no-print ${selectedReceipt ? 'print-hide-when-receipt-open' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 text-emerald-100 hover:bg-emerald-700/50 rounded-xl lg:hidden">
@@ -785,7 +1393,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex-1 flex max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 gap-6">
+      <div className={`flex-1 flex max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 gap-6 ${selectedReceipt ? 'print-hide-when-receipt-open' : ''}`}>
         <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 p-4 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} no-print shadow-lg lg:shadow-none`}>
           <div className="flex items-center justify-between pb-4 border-b border-slate-100 lg:hidden">
             <LogoBumiArsakha className="h-8" showSubtext={false} isDarkBg={false} />
@@ -817,6 +1425,90 @@ export default function App() {
         <main className="flex-1 space-y-6 overflow-hidden">
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
+              {/* NOTIFIKASI PENGINGAT (TEXT BERJALAN DI DASHBOARD) */}
+              <div className="bg-amber-50 border border-amber-200 rounded-3xl p-3.5 shadow-sm space-y-2.5">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <span className="bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5 shrink-0 shadow-sm">
+                    <Bell className="w-3.5 h-3.5" /> Pengingat
+                  </span>
+                  <div className="flex-1 overflow-hidden relative h-5 flex items-center">
+                    {announcements.length === 0 ? (
+                      <span className="text-xs text-amber-800/70 italic">Belum ada pengumuman atau pengingat aktif.</span>
+                    ) : (
+                      <div className="animate-marquee-text text-xs font-bold text-amber-950">
+                        {announcements.map((a) => `📢 ${a.text}`).join('     •     ')}
+                      </div>
+                    )}
+                  </div>
+                  {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                    <button
+                      type="button"
+                      onClick={handleOpenAddAnnouncement}
+                      className="bg-amber-700 hover:bg-amber-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 shrink-0 shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Tambah Teks
+                    </button>
+                  )}
+                </div>
+
+                {/* DAFTAR KELOLA PENGINGAT KHUSUS SUPERADMIN & BENDAHARA */}
+                {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && announcements.length > 0 && (
+                  <div className="border-t border-amber-200/80 pt-2 space-y-1.5">
+                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                      Kelola Notifikasi Pengingat (SuperAdmin & Bendahara):
+                    </span>
+                    <div className="space-y-1.5">
+                      {announcements.map((ann) => (
+                        <div
+                          key={ann.id}
+                          className="bg-white/90 border border-amber-200/80 rounded-xl px-3 py-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="text-slate-800 font-medium flex-1">
+                            <span>{ann.text}</span>
+                            <span className="text-[10px] text-slate-400 font-mono ml-2">({ann.updatedAt})</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditAnnouncement(ann)}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-300 inline-flex items-center gap-1"
+                            >
+                              <Edit className="w-3 h-3" /> Edit
+                            </button>
+                            {confirmDeleteAnnId === ann.id ? (
+                              <div className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAnnouncement(ann.id)}
+                                  className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded"
+                                >
+                                  Hapus!
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteAnnId(null)}
+                                  className="bg-slate-200 text-slate-700 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteAnnId(ann.id)}
+                                className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-rose-200 inline-flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3 h-3" /> Hapus
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-emerald-900 text-white rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col justify-between">
                   <div className="absolute right-2 bottom-0 text-emerald-800/40 text-7xl font-bold select-none pointer-events-none font-serif">Rp</div>
@@ -931,34 +1623,202 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'warga' && (
+          {activeTab === 'iuran_warga' && currentUser.role === 'WARGA' && (
             <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                   <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                    <Home className="w-5 h-5 text-emerald-700" /> Master Data Warga & Unit Rumah
+                    <DollarSign className="w-5 h-5 text-emerald-700" /> Rincian Iuran Warga & Bukti Kwitansi
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Total {houses.length} Unit Rumah Terdaftar</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Riwayat pembayaran iuran kas perumahan atas nama <strong>{currentUser.name}</strong>
+                  </p>
                 </div>
+                <div className="bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-2xl text-right">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase block">Total Iuran Terbayar</span>
+                  <span className="text-base font-black font-mono text-emerald-900">
+                    {formatIDR(currentWargaBills.filter((b) => b.status === 'PAID').reduce((acc, c) => acc + c.amount, 0))}
+                  </span>
+                </div>
+              </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Cari nama / unit rumah..."
-                      value={houseSearchQuery}
-                      onChange={(e) => setHouseSearchQuery(e.target.value)}
-                      className="w-full text-xs pl-9 pr-3 py-2 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
+              {currentWargaHouses.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-3xl p-10 text-center space-y-2">
+                  <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+                  <p className="text-xs font-bold text-slate-700">Data unit rumah untuk akun "{currentUser.name}" belum tertaut.</p>
+                  <p className="text-[11px] text-slate-500">Silakan hubungi Admin atau Bendahara untuk memastikan nama penghuni di Data Warga sesuai dengan akun Anda.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {currentWargaHouses.map((h) => {
+                      const unitPaidCount = bills.filter((b) => b.houseId === h.id && b.status === 'PAID').length;
+                      return (
+                        <div key={h.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold px-2.5 py-1 bg-slate-100 text-slate-800 rounded-lg">
+                              {h.block} No. {h.number}
+                            </span>
+                            <h3 className="font-bold text-slate-900 text-sm mt-2">{h.residentName}</h3>
+                            <p className="text-xs text-slate-500 font-mono">No. WA: {h.phone}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-500 block">Bulan Lunas</span>
+                            <span className="text-lg font-black font-mono text-emerald-700">{unitPaidCount} Bulan</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  {['SUPERADMIN', 'ADMIN'].includes(currentUser.role) && (
-                    <button onClick={() => setShowAddHouseModal(true)} className="w-full sm:w-auto bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2 rounded-2xl font-bold flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap">
-                      <Plus className="w-4 h-4" /> Tambah Unit Rumah
-                    </button>
-                  )}
+                  <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-xs text-slate-800">
+                      Daftar Rincian Pembayaran & Kwitansi Digital
+                    </div>
+                    <div className="overflow-x-auto">
+                      {currentWargaBills.length === 0 ? (
+                        <p className="text-center text-xs text-slate-400 py-8">Belum ada riwayat pembayaran iuran yang tercatat untuk unit Anda.</p>
+                      ) : (
+                        <table className="w-full text-xs text-left">
+                          <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                            <tr>
+                              <th className="p-3">No. Kwitansi</th>
+                              <th className="p-3">Unit Rumah</th>
+                              <th className="p-3">Periode Bulan</th>
+                              <th className="p-3">Tanggal Bayar</th>
+                              <th className="p-3 text-right">Nominal</th>
+                              <th className="p-3 text-center">Status</th>
+                              <th className="p-3 text-center">Bukti Kwitansi</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-mono">
+                            {currentWargaBills.map((b) => {
+                              const unitObj = currentWargaHouses.find((h) => h.id === b.houseId) || currentWargaHouses[0];
+                              return (
+                                <tr key={b.id}>
+                                  <td className="p-3 font-bold text-slate-700">{b.receiptNo}</td>
+                                  <td className="p-3 font-sans font-semibold text-slate-800">
+                                    {unitObj ? `${unitObj.block} No. ${unitObj.number}` : '-'}
+                                  </td>
+                                  <td className="p-3 font-sans font-bold text-slate-900">
+                                    {b.periodMonth} {b.periodYear}
+                                  </td>
+                                  <td className="p-3 text-slate-500 text-[11px]">{b.paidAt}</td>
+                                  <td className="p-3 text-right font-bold text-emerald-700">{formatIDR(b.amount)}</td>
+                                  <td className="p-3 text-center font-sans">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                                      ✓ {b.status === 'PAID' ? 'LUNAS' : b.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-center font-sans">
+                                    {unitObj && (
+                                      <button
+                                        onClick={() => setSelectedReceipt({ bill: b, house: unitObj })}
+                                        className="bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold px-3 py-1.5 rounded-xl inline-flex items-center gap-1 shadow-sm"
+                                      >
+                                        <FileText className="w-3 h-3" /> Lihat & Cetak Kwitansi
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'warga' && (
+            <div className="space-y-6">
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                  <div>
+                    <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                      <Home className="w-5 h-5 text-emerald-700" /> Master Data Warga & Unit Rumah
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">Total {houses.length} Unit Rumah Terdaftar</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                    <div className="relative flex-1 sm:w-56">
+                      <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Cari nama / unit rumah..."
+                        value={houseSearchQuery}
+                        onChange={(e) => setHouseSearchQuery(e.target.value)}
+                        className="w-full text-xs pl-9 pr-3 py-2 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    {/* TOMBOL BACKUP (DOWNLOAD) & IMPORT OTOMATIS (KHUSUS SUPERADMIN & BENDAHARA) */}
+                    {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleDownloadHousesBackup}
+                          className="bg-slate-800 hover:bg-slate-900 text-white text-xs px-3.5 py-2 rounded-2xl font-bold flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                          title="Download seluruh data warga & unit rumah ke file JSON"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Backup Data
+                        </button>
+
+                        <input
+                          ref={houseFileInputRef}
+                          type="file"
+                          accept=".json,application/json"
+                          onChange={handleImportHousesBackup}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => houseFileInputRef.current?.click()}
+                          className="bg-sky-700 hover:bg-sky-800 text-white text-xs px-3.5 py-2 rounded-2xl font-bold flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                          title="Upload file JSON backup untuk memulihkan / menggabungkan data otomatis"
+                        >
+                          <Upload className="w-3.5 h-3.5" /> Import Otomatis
+                        </button>
+                      </>
+                    )}
+
+                    {['SUPERADMIN', 'ADMIN'].includes(currentUser.role) && (
+                      <button onClick={() => setShowAddHouseModal(true)} className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2 rounded-2xl font-bold flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap">
+                        <Plus className="w-4 h-4" /> Tambah Unit Rumah
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {backupFeedback && (
+                  <div
+                    className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+                      backupFeedback.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-semibold">
+                      {backupFeedback.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      )}
+                      <span>{backupFeedback.message}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBackupFeedback(null)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {houses.length === 0 ? (
@@ -979,7 +1839,9 @@ export default function App() {
                         </div>
                         <div>
                           <h4 className="font-bold text-slate-900 text-sm">{h.residentName}</h4>
-                          <p className="text-xs text-slate-500 font-mono mt-0.5">No WA: {h.phone}</p>
+                          <p className="text-xs text-slate-500 font-mono mt-0.5">
+                            No WA: {currentUser.role === 'WARGA' ? '08xxx' : h.phone}
+                          </p>
                         </div>
                         {['SUPERADMIN', 'ADMIN'].includes(currentUser.role) && (
                           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -996,30 +1858,88 @@ export default function App() {
 
           {activeTab === 'iuran' && (
             <div className="space-y-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-5 rounded-3xl shadow-sm gap-4">
-                <div>
-                  <h2 className="font-bold text-slate-900 text-base">Pencatatan & Penagihan Iuran Warga</h2>
-                  <p className="text-xs text-slate-500">Sistem Iuran Standar Rp 5.000 / Bulan (Pencegahan Duplikasi Bulan Aktif)</p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Cari unit / nama warga..."
-                      value={iuranSearchQuery}
-                      onChange={(e) => setIuranSearchQuery(e.target.value)}
-                      className="w-full text-xs pl-9 pr-3 py-2 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
+              <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm space-y-4">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                  <div>
+                    <h2 className="font-bold text-slate-900 text-base">Pencatatan & Penagihan Iuran Warga</h2>
+                    <p className="text-xs text-slate-500">Sistem Iuran Standar Rp 5.000 / Bulan (Pencegahan Duplikasi Bulan Aktif)</p>
                   </div>
 
-                  {['SUPERADMIN', 'PETUGAS', 'BENDAHARA'].includes(currentUser.role) && (
-                    <button onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} className="w-full sm:w-auto bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap">
-                      <Plus className="w-4 h-4" /> Catat Pembayaran Iuran
-                    </button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                    <div className="relative flex-1 sm:w-56">
+                      <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Cari unit / nama warga..."
+                        value={iuranSearchQuery}
+                        onChange={(e) => setIuranSearchQuery(e.target.value)}
+                        className="w-full text-xs pl-9 pr-3 py-2 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    {/* BACKUP & RESTORE IURAN WARGA (HANYA SUPERADMIN & BENDAHARA) */}
+                    {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleDownloadIuranBackup}
+                          className="bg-slate-800 hover:bg-slate-900 text-white text-xs px-3.5 py-2 rounded-2xl font-bold flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                          title="Download backup seluruh pencatatan & pembayaran iuran warga"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Backup Data
+                        </button>
+
+                        <input
+                          ref={iuranFileInputRef}
+                          type="file"
+                          accept=".json,application/json"
+                          onChange={handleImportIuranBackup}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => iuranFileInputRef.current?.click()}
+                          className="bg-sky-700 hover:bg-sky-800 text-white text-xs px-3.5 py-2 rounded-2xl font-bold flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                          title="Upload & restore otomatis data backup iuran warga"
+                        >
+                          <Upload className="w-3.5 h-3.5" /> Import Otomatis
+                        </button>
+                      </>
+                    )}
+
+                    {['SUPERADMIN', 'PETUGAS', 'BENDAHARA'].includes(currentUser.role) && (
+                      <button onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2 rounded-2xl font-bold flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap">
+                        <Plus className="w-4 h-4" /> Catat Pembayaran Iuran
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {iuranBackupFeedback && (
+                  <div
+                    className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+                      iuranBackupFeedback.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-semibold">
+                      {iuranBackupFeedback.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      )}
+                      <span>{iuranBackupFeedback.message}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIuranBackupFeedback(null)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
@@ -1088,15 +2008,28 @@ export default function App() {
 
           {activeTab === 'rekonsiliasi' && (
             <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex justify-between items-center">
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h2 className="font-bold text-slate-900 text-base">Penyetoran Petugas & Rekonsiliasi Kas</h2>
                   <p className="text-xs text-slate-500">Pencocokan Uang Fisik Tunai dan Rekening Bank</p>
                 </div>
                 {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
-                  <button onClick={() => setShowSettlementModal(true)} className="bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md">
-                    <Plus className="w-4 h-4" /> Input Setoran Penagih
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenAddBankBalance}
+                      className="bg-sky-700 hover:bg-sky-800 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md"
+                    >
+                      <Plus className="w-4 h-4" /> Input Saldo Rekening Bank
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSettlementModal(true)}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md"
+                    >
+                      <Plus className="w-4 h-4" /> Input Setoran Penagih
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1108,9 +2041,14 @@ export default function App() {
                       <span className="font-sans text-slate-600">Kas Tunai di Bendahara:</span>
                       <strong>{formatIDR(systemConfig.cashInHand)}</strong>
                     </div>
-                    <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border">
-                      <span className="font-sans text-slate-600">Saldo Rekening Bank:</span>
-                      <strong>{formatIDR(systemConfig.bankBalance)}</strong>
+                    <div className="flex justify-between items-center bg-sky-50/70 p-3 rounded-xl border border-sky-200">
+                      <div>
+                        <span className="font-sans text-slate-700 font-semibold block">Saldo Rekening Bank:</span>
+                        <span className="font-sans text-[10px] text-slate-500">
+                          {systemConfig.bankName} ({systemConfig.bankAccountNo})
+                        </span>
+                      </div>
+                      <strong className="text-sky-900">{formatIDR(totalBankBalanceFromEntries)}</strong>
                     </div>
                   </div>
                 </div>
@@ -1128,6 +2066,98 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* DAFTAR RINCIAN SALDO REKENING BANK (EDIT & HAPUS OLEH SUPERADMIN & BENDAHARA) */}
+              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                    Rincian Input Saldo Rekening Bank
+                  </h3>
+                  {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                    <button
+                      type="button"
+                      onClick={handleOpenAddBankBalance}
+                      className="text-xs font-bold text-sky-700 hover:text-sky-800 flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Tambah Data Rekening
+                    </button>
+                  )}
+                </div>
+
+                {bankBalanceEntries.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-4">
+                    Belum ada rincian saldo rekening bank yang diinput.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left font-mono">
+                      <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b">
+                        <tr>
+                          <th className="p-3">Tanggal</th>
+                          <th className="p-3">Nama Bank & No. Rekening</th>
+                          <th className="p-3">Keterangan</th>
+                          <th className="p-3 text-right">Nominal Saldo</th>
+                          {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                            <th className="p-3 text-center">Aksi</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {bankBalanceEntries.map((entry) => (
+                          <tr key={entry.id}>
+                            <td className="p-3 text-slate-500">{entry.date}</td>
+                            <td className="p-3 font-sans font-bold text-slate-800">
+                              {entry.bankName}{' '}
+                              <span className="font-mono font-normal text-slate-500">({entry.accountNo})</span>
+                            </td>
+                            <td className="p-3 font-sans text-slate-600">{entry.notes}</td>
+                            <td className="p-3 text-right font-bold text-sky-800">{formatIDR(entry.amount)}</td>
+                            {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                              <td className="p-3 text-center font-sans">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditBankBalance(entry)}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-300 inline-flex items-center gap-1"
+                                  >
+                                    <Edit className="w-3 h-3" /> Edit
+                                  </button>
+                                  {confirmDeleteBankId === entry.id ? (
+                                    <div className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-lg">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteBankBalance(entry.id)}
+                                        className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded"
+                                      >
+                                        Hapus!
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmDeleteBankId(null)}
+                                        className="bg-slate-200 text-slate-700 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                      >
+                                        Batal
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteBankId(entry.id)}
+                                      className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-rose-200 inline-flex items-center gap-1"
+                                    >
+                                      <Trash2 className="w-3 h-3" /> Hapus
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {cashSettlements.length > 0 && (
@@ -1164,13 +2194,27 @@ export default function App() {
 
           {activeTab === 'pengeluaran' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white border border-slate-200 p-5 rounded-3xl shadow-sm gap-4">
                 <div>
                   <h2 className="font-bold text-slate-900 text-base">Pengeluaran & Persetujuan Kas</h2>
-                  <p className="text-xs text-slate-500">Mekanisme Approval Kolektif Pengurus (Dilengkapi Tanggal Pengajuan)</p>
+                  <p className="text-xs text-slate-500">Approval Ketua dan Sekretaris serta Bendahara</p>
                 </div>
-                {['SUPERADMIN', 'BENDAHARA', 'KETUA'].includes(currentUser.role) && (
-                  <button onClick={() => setShowAddExpenseModal(true)} className="bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md">
+                {['SUPERADMIN', 'BENDAHARA', 'KETUA', 'SEKRETARIS'].includes(currentUser.role) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewExpense({
+                        date: new Date().toISOString().split('T')[0],
+                        category: categories[0] || INITIAL_EXPENSE_CATEGORIES[0],
+                        amount: '',
+                        purpose: '',
+                        description: '',
+                        proofUrl: ''
+                      });
+                      setShowAddExpenseModal(true);
+                    }}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2.5 rounded-2xl font-bold flex items-center gap-1.5 shadow-md cursor-pointer"
+                  >
                     <Plus className="w-4 h-4" /> Ajukan Pengeluaran
                   </button>
                 )}
@@ -1182,35 +2226,160 @@ export default function App() {
                     Belum ada pengajuan pengeluaran kas.
                   </div>
                 ) : (
-                  expenseRequests.map((req) => (
-                    <div key={req.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
-                      <div className="flex justify-between items-center border-b pb-3">
-                        <div>
-                          <span className="text-[10px] font-mono text-slate-400 uppercase">{req.id} • Tgl: {req.requestDate}</span>
-                          <h3 className="font-bold text-slate-900 text-sm">{req.purpose}</h3>
-                          <p className="text-xs text-slate-500">Kategori: {req.category} • Pengaju: {req.applicantName}</p>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-base font-bold font-mono text-rose-700">{formatIDR(req.amount)}</div>
-                          <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full ${req.status === 'REALIZED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {req.status}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-600">{req.description}</p>
+                  expenseRequests.map((req) => {
+                    const ketuaOk = Boolean(req.approvals?.KETUA?.approved);
+                    const sekretarisOk = Boolean(req.approvals?.SEKRETARIS?.approved);
+                    const bendaharaOk = Boolean(req.approvals?.BENDAHARA?.approved);
 
-                      {req.status === 'PENDING' && ['SUPERADMIN', 'KETUA', 'BENDAHARA'].includes(currentUser.role) && (
-                        <div className="pt-2 flex justify-end">
-                          <button
-                            onClick={() => handleApproveExpense(req.id)}
-                            className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-1.5 rounded-xl font-bold flex items-center gap-1 shadow-sm"
-                          >
-                            <Check className="w-4 h-4" /> Setujui & Realisasikan Pengeluaran
-                          </button>
+                    return (
+                      <div key={req.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-mono text-slate-400 uppercase">{req.id} • Tgl: {req.requestDate}</span>
+                            </div>
+                            <h3 className="font-bold text-slate-900 text-sm mt-1">{req.purpose}</h3>
+                            <p className="text-xs text-slate-500">Kategori: {req.category} • Pengaju: {req.applicantName}</p>
+                          </div>
+                          <div className="flex flex-col sm:items-end gap-2">
+                            <div className="text-left sm:text-right">
+                              <div className="text-base font-bold font-mono text-rose-700">{formatIDR(req.amount)}</div>
+                              <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full ${req.status === 'REALIZED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                {req.status === 'REALIZED' ? 'APPROVED & REALIZED' : 'PENDING (MENUNGGU 3 PENGURUS INTI)'}
+                              </span>
+                            </div>
+
+                            {/* AKSI EDIT & HAPUS (KHUSUS SUPERADMIN & BENDAHARA) */}
+                            {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingExpense({
+                                      ...req,
+                                      amount: req.amount.toString()
+                                    });
+                                    setShowEditExpenseModal(true);
+                                  }}
+                                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-300 inline-flex items-center gap-1"
+                                >
+                                  <Edit className="w-3 h-3" /> Edit
+                                </button>
+                                {confirmDeleteExpenseId === req.id ? (
+                                  <div className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg">
+                                    <span className="text-[10px] text-rose-700 font-bold">Hapus data ini?</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteExpense(req.id)}
+                                      className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white px-2 py-0.5 rounded font-bold"
+                                    >
+                                      Ya, Hapus
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteExpenseId(null)}
+                                      className="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold"
+                                    >
+                                      Batal
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteExpenseId(req.id)}
+                                    className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-rose-200 inline-flex items-center gap-1"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Hapus
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))
+
+                        <p className="text-xs text-slate-600">{req.description}</p>
+
+                        {/* NOTIFIKASI STATUS PERSETUJUAN 3 PENGURUS INTI */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                              <Bell className="w-3.5 h-3.5 text-amber-600" /> Status Persetujuan Pengurus Inti (Wajib 3 Setuju):
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-slate-500">
+                              {[ketuaOk, sekretarisOk, bendaharaOk].filter(Boolean).length} / 3 Setuju
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            {/* 1. KETUA */}
+                            <div className={`p-2.5 rounded-xl border flex items-center justify-between ${ketuaOk ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-white border-slate-200 text-slate-500'}`}>
+                              <div>
+                                <div className="font-bold text-[11px]">1. Ketua (Bapak Cece)</div>
+                                <div className="text-[10px]">
+                                  {ketuaOk ? `✓ Sudah Setuju (${req.approvals.KETUA.by})` : '⏳ Menunggu Persetujuan'}
+                                </div>
+                              </div>
+                              {ketuaOk ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
+                            </div>
+
+                            {/* 2. SEKRETARIS */}
+                            <div className={`p-2.5 rounded-xl border flex items-center justify-between ${sekretarisOk ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-white border-slate-200 text-slate-500'}`}>
+                              <div>
+                                <div className="font-bold text-[11px]">2. Sekretaris (Rahman)</div>
+                                <div className="text-[10px]">
+                                  {sekretarisOk ? `✓ Sudah Setuju (${req.approvals.SEKRETARIS.by})` : ketuaOk ? '⏳ Menunggu Sekretaris' : '🔒 Menunggu Ketua'}
+                                </div>
+                              </div>
+                              {sekretarisOk ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />}
+                            </div>
+
+                            {/* 3. BENDAHARA */}
+                            <div className={`p-2.5 rounded-xl border flex items-center justify-between ${bendaharaOk ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-white border-slate-200 text-slate-500'}`}>
+                              <div>
+                                <div className="font-bold text-[11px]">3. Bendahara (Yana)</div>
+                                <div className="text-[10px]">
+                                  {bendaharaOk ? `✓ Sudah Setuju (${req.approvals.BENDAHARA.by})` : (ketuaOk && sekretarisOk) ? '⏳ Menunggu Bendahara' : '🔒 Menunggu Ketua & Sekretaris'}
+                                </div>
+                              </div>
+                              {bendaharaOk ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* TOMBOL AKSI PERSETUJUAN BERJENJANG */}
+                        {req.status === 'PENDING' && (
+                          <div className="pt-1 flex flex-wrap justify-end gap-2">
+                            {!ketuaOk && ['KETUA', 'SUPERADMIN'].includes(currentUser.role) && (
+                              <button
+                                onClick={() => handleApproveExpenseRole(req.id, 'KETUA')}
+                                className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
+                              >
+                                <Check className="w-4 h-4" /> Setujui sebagai Ketua
+                              </button>
+                            )}
+
+                            {ketuaOk && !sekretarisOk && ['SEKRETARIS', 'SUPERADMIN'].includes(currentUser.role) && (
+                              <button
+                                onClick={() => handleApproveExpenseRole(req.id, 'SEKRETARIS')}
+                                className="bg-sky-700 hover:bg-sky-800 text-white text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
+                              >
+                                <Check className="w-4 h-4" /> Setujui sebagai Sekretaris
+                              </button>
+                            )}
+
+                            {ketuaOk && sekretarisOk && !bendaharaOk && ['BENDAHARA', 'SUPERADMIN'].includes(currentUser.role) && (
+                              <button
+                                onClick={() => handleApproveExpenseRole(req.id, 'BENDAHARA')}
+                                className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
+                              >
+                                <Check className="w-4 h-4" /> Setujui & Realisasikan (Bendahara)
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1309,8 +2478,8 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                  <select 
-                    value={reportFilterType} 
+                  <select
+                    value={reportFilterType}
                     onChange={(e) => setReportFilterType(e.target.value)}
                     className="text-xs p-2.5 border rounded-xl font-bold bg-slate-50"
                   >
@@ -1321,8 +2490,8 @@ export default function App() {
                   </select>
 
                   {reportFilterType === 'DAILY' && (
-                    <input 
-                      type="date" 
+                    <input
+                      type="date"
                       value={reportFilterDate}
                       onChange={(e) => setReportFilterDate(e.target.value)}
                       className="text-xs p-2 border rounded-xl font-mono bg-slate-50"
@@ -1331,8 +2500,8 @@ export default function App() {
 
                   {reportFilterType === 'MONTHLY' && (
                     <div className="flex gap-1">
-                      <select 
-                        value={reportFilterMonth} 
+                      <select
+                        value={reportFilterMonth}
                         onChange={(e) => setReportFilterMonth(e.target.value)}
                         className="text-xs p-2 border rounded-xl font-bold bg-slate-50"
                       >
@@ -1340,8 +2509,8 @@ export default function App() {
                           <option key={idx} value={idx + 1}>{m}</option>
                         ))}
                       </select>
-                      <select 
-                        value={reportFilterYear} 
+                      <select
+                        value={reportFilterYear}
                         onChange={(e) => setReportFilterYear(e.target.value)}
                         className="text-xs p-2 border rounded-xl font-bold bg-slate-50"
                       >
@@ -1352,8 +2521,8 @@ export default function App() {
                   )}
 
                   {reportFilterType === 'YEARLY' && (
-                    <select 
-                      value={reportFilterYear} 
+                    <select
+                      value={reportFilterYear}
                       onChange={(e) => setReportFilterYear(e.target.value)}
                       className="text-xs p-2 border rounded-xl font-bold bg-slate-50"
                     >
@@ -1369,7 +2538,7 @@ export default function App() {
               </div>
 
               {/* DOKUMEN LAPORAN UTAMA */}
-              <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
+              <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6 print-report-container">
                 <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4">
                   <LogoBumiArsakha className="h-16" showSubtext={true} isDarkBg={false} />
                   <div className="text-right">
@@ -1573,8 +2742,8 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Bulan</label>
-                  <select 
-                    value={editingBill.periodMonth} 
+                  <select
+                    value={editingBill.periodMonth}
                     onChange={(e) => setEditingBill({ ...editingBill, periodMonth: e.target.value })}
                     className="w-full text-xs p-2.5 border rounded-xl font-bold bg-white"
                   >
@@ -1585,8 +2754,8 @@ export default function App() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Tahun</label>
-                  <select 
-                    value={editingBill.periodYear} 
+                  <select
+                    value={editingBill.periodYear}
                     onChange={(e) => setEditingBill({ ...editingBill, periodYear: e.target.value })}
                     className="w-full text-xs p-2.5 border rounded-xl font-bold bg-white"
                   >
@@ -1597,18 +2766,18 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal (Rp)</label>
-                <input 
-                  type="number" 
-                  required 
-                  value={editingBill.amount} 
-                  onChange={(e) => setEditingBill({ ...editingBill, amount: e.target.value })} 
-                  className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-emerald-800" 
+                <input
+                  type="number"
+                  required
+                  value={editingBill.amount}
+                  onChange={(e) => setEditingBill({ ...editingBill, amount: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-emerald-800"
                 />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
-                <select 
-                  value={editingBill.status} 
+                <select
+                  value={editingBill.status}
                   onChange={(e) => setEditingBill({ ...editingBill, status: e.target.value })}
                   className="w-full text-xs p-2.5 border rounded-xl font-bold bg-white"
                 >
@@ -1650,8 +2819,8 @@ export default function App() {
 
       {/* MODAL KWITANSI OFFICIAL */}
       {selectedReceipt && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl relative border border-slate-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 print-receipt-modal-wrapper">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl relative border border-slate-200 print-receipt-modal-box">
             <div className="flex justify-between items-center no-print border-b pb-3">
               <h3 className="font-bold text-slate-900 text-sm">Kwitansi Tanda Bukti Pembayaran Resmi</h3>
               <button onClick={() => setSelectedReceipt(null)} className="text-slate-400 hover:text-slate-600">
@@ -1726,7 +2895,7 @@ export default function App() {
 
             <div className="flex justify-end gap-3 no-print">
               <button onClick={() => window.print()} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-md">
-                <Printer className="w-4 h-4" /> Cetak Kwitansi
+                <Printer className="w-4 h-4" /> Cetak / Simpan PDF Kwitansi
               </button>
             </div>
           </div>
@@ -1770,7 +2939,7 @@ export default function App() {
 
       {/* MODAL REKAPAN "SELENGKAPNYA" PER UNIT */}
       {showDetailsModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3">
               <div>
@@ -1779,7 +2948,7 @@ export default function App() {
                   Unit {showDetailsModal.block} No. {showDetailsModal.number} - {showDetailsModal.residentName}
                 </p>
               </div>
-              <button onClick={() => setShowDetailsModal(null)} className="text-slate-400"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowDetailsModal(null); setConfirmDeleteBillId(null); }} className="text-slate-400"><X className="w-5 h-5" /></button>
             </div>
 
             <div className="space-y-3">
@@ -1798,7 +2967,7 @@ export default function App() {
                       <th className="p-2.5">Tanggal Bayar</th>
                       <th className="p-2.5 text-right">Nominal</th>
                       <th className="p-2.5 text-center">Status</th>
-                      <th className="p-2.5 text-center">Aksi (Kwitansi / Edit)</th>
+                      <th className="p-2.5 text-center">Aksi (Kwitansi / Edit / Hapus)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y font-mono">
@@ -1818,7 +2987,7 @@ export default function App() {
                             </span>
                           </td>
                           <td className="p-2.5 text-center font-sans">
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
                               <button
                                 onClick={() => setSelectedReceipt({ bill: b, house: showDetailsModal })}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 shadow-sm"
@@ -1826,12 +2995,27 @@ export default function App() {
                                 <FileText className="w-3 h-3" /> Kwitansi
                               </button>
                               {['SUPERADMIN', 'BENDAHARA'].includes(currentUser.role) && (
-                                <button
-                                  onClick={() => { setEditingBill(b); setShowEditBillModal(true); }}
-                                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 border border-slate-300"
-                                >
-                                  <Edit className="w-3 h-3" /> Edit
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => { setEditingBill(b); setShowEditBillModal(true); }}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 border border-slate-300"
+                                  >
+                                    <Edit className="w-3 h-3" /> Edit
+                                  </button>
+                                  {confirmDeleteBillId === b.id ? (
+                                    <div className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-lg">
+                                      <button onClick={() => handleDeleteBill(b.id)} className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">Hapus!</button>
+                                      <button onClick={() => setConfirmDeleteBillId(null)} className="bg-slate-200 text-slate-700 text-[10px] font-bold px-1.5 py-0.5 rounded">Batal</button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmDeleteBillId(b.id)}
+                                      className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1 border border-rose-200"
+                                    >
+                                      <Trash2 className="w-3 h-3" /> Hapus
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </td>
@@ -2112,22 +3296,99 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL AJUKAN PENGELUARAN */}
+      {/* MODAL FORMULIR PENGAJUAN PENGELUARAN KAS */}
       {showAddExpenseModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3">
               <h3 className="font-bold text-slate-900 text-sm">Formulir Pengajuan Pengeluaran Kas</h3>
-              <button onClick={() => setShowAddExpenseModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => setShowAddExpenseModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
             </div>
             <form onSubmit={handleAddExpenseRequest} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Pengajuan</label>
-                <input type="date" required value={newExpense.date} onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+                <input
+                  type="date"
+                  required
+                  value={newExpense.date}
+                  onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Kategori Pengeluaran</label>
+                <select
+                  value={newExpense.category}
+                  onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-bold bg-white"
+                >
+                  {(categories.length > 0 ? categories : INITIAL_EXPENSE_CATEGORIES).map((cat, idx) => (
+                    <option key={idx} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal Pengajuan (Rp)</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="50000"
+                  value={newExpense.amount}
+                  onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-rose-700"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tujuan / Keperluan</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Pembelian Lampu PJU Blok A"
+                  value={newExpense.purpose}
+                  onChange={(e) => setNewExpense({ ...newExpense, purpose: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Keterangan Detail</label>
+                <textarea
+                  rows={2}
+                  placeholder="Rincian kebutuhan pengeluaran..."
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+              >
+                Kirim Pengajuan Pengeluaran
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDIT PENGELUARAN KAS (Hanya Bendahara & SuperAdmin) */}
+      {showEditExpenseModal && editingExpense && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Pengajuan Pengeluaran Kas</h3>
+              <button onClick={() => setShowEditExpenseModal(false)} className="text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveExpenseEdit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Pengajuan</label>
+                <input type="date" required value={editingExpense.requestDate} onChange={(e) => setEditingExpense({ ...editingExpense, requestDate: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Kategori</label>
-                <select value={newExpense.category} onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold">
+                <select value={editingExpense.category} onChange={(e) => setEditingExpense({ ...editingExpense, category: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-bold">
                   {categories.map((cat, idx) => (
                     <option key={idx} value={cat}>{cat}</option>
                   ))}
@@ -2135,17 +3396,17 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal (Rp)</label>
-                <input type="number" required placeholder="50000" value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono" />
+                <input type="number" required value={editingExpense.amount} onChange={(e) => setEditingExpense({ ...editingExpense, amount: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-rose-700" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Tujuan / Keperluan</label>
-                <input type="text" required placeholder="Pembelian Lampu PJU" value={newExpense.purpose} onChange={(e) => setNewExpense({ ...newExpense, purpose: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+                <input type="text" required value={editingExpense.purpose} onChange={(e) => setEditingExpense({ ...editingExpense, purpose: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Keterangan Detail</label>
-                <textarea rows={2} placeholder="Keterangan..." value={newExpense.description} onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
+                <textarea rows={2} value={editingExpense.description} onChange={(e) => setEditingExpense({ ...editingExpense, description: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
               </div>
-              <button type="submit" className="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Kirim Pengajuan</button>
+              <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Perubahan Pengeluaran</button>
             </form>
           </div>
         </div>
@@ -2181,6 +3442,134 @@ export default function App() {
                 <input type="text" placeholder="Setoran tunai" value={newSettlement.notes} onChange={(e) => setNewSettlement({ ...newSettlement, notes: e.target.value })} className="w-full text-xs p-2.5 border rounded-xl" />
               </div>
               <button type="submit" className="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md">Simpan Setoran</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TAMBAH / EDIT NOTIFIKASI PENGINGAT (TEXT BERJALAN) */}
+      {showAnnouncementModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">
+                {editingAnnouncement ? 'Edit Notifikasi Pengingat' : 'Tambah Notifikasi Pengingat Baru'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAnnouncementModal(false);
+                  setEditingAnnouncement(null);
+                }}
+                className="text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveAnnouncement} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Isi Pesan Teks Berjalan (Dashboard)
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Contoh: Mohon segera melunasi iuran bulan ini sebelum tanggal 10..."
+                  value={announcementText}
+                  onChange={(e) => setAnnouncementText(e.target.value)}
+                  className="w-full text-xs p-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+              >
+                {editingAnnouncement ? 'Simpan Perubahan Pengingat' : 'Tampilkan di Dashboard'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL INPUT / EDIT SALDO REKENING BANK (SUPERADMIN & BENDAHARA) */}
+      {showBankBalanceModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">
+                {editingBankEntry ? 'Edit Saldo Rekening Bank' : 'Input Saldo Rekening Bank'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBankBalanceModal(false);
+                  setEditingBankEntry(null);
+                }}
+                className="text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveBankBalance} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Pencatatan</label>
+                <input
+                  type="date"
+                  required
+                  value={bankEntryForm.date}
+                  onChange={(e) => setBankEntryForm({ ...bankEntryForm, date: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Bank</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Bank Mandiri / BRI / BCA"
+                  value={bankEntryForm.bankName}
+                  onChange={(e) => setBankEntryForm({ ...bankEntryForm, bankName: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor Rekening</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="123-456-7890"
+                  value={bankEntryForm.accountNo}
+                  onChange={(e) => setBankEntryForm({ ...bankEntryForm, accountNo: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nominal Saldo Rekening (Rp)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="500000"
+                  value={bankEntryForm.amount}
+                  onChange={(e) => setBankEntryForm({ ...bankEntryForm, amount: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl font-mono font-bold text-sky-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Keterangan / Catatan</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Saldo rekening kas perumahan per akhir bulan"
+                  value={bankEntryForm.notes}
+                  onChange={(e) => setBankEntryForm({ ...bankEntryForm, notes: e.target.value })}
+                  className="w-full text-xs p-2.5 border rounded-xl"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-sky-700 hover:bg-sky-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+              >
+                {editingBankEntry ? 'Simpan Perubahan Saldo Bank' : 'Simpan Saldo Rekening Bank'}
+              </button>
             </form>
           </div>
         </div>
